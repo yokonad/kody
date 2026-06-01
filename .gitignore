@@ -1,0 +1,32 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config (user-specific)
+.kody/
+.kody/config.toml
+.kody/methods.db
+
+# Build artifacts
+*.exe
+*.dmg
+*.deb
+*.rpm
+
+# Logs
+*.log
+kody_debug.log
+
+# Test artifacts
+coverage/
+*.profdata
