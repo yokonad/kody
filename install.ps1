@@ -30,6 +30,14 @@ function Pause-Script {
     $null = Read-Host
 }
 
+# Verificar git primero
+if (-not (Test-Command git)) {
+    Write-Host "[ERROR] Git no esta instalado." -ForegroundColor Red
+    Write-Host "[INFO] Descarga Git desde: https://git-scm.com/download/win" -ForegroundColor Cyan
+    Pause-Script
+    return
+}
+
 # PASO 1: Rust
 Write-Host "[PASO 1] Verificando Rust..." -ForegroundColor Magenta
 
@@ -47,7 +55,8 @@ if (Test-RustInstalled) {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         Invoke-WebRequest -Uri $rustupUrl -OutFile $rustupPath -UseBasicParsing
     } catch {
-        Write-Host "  [ERROR] No se pudo descargar." -ForegroundColor Red
+        Write-Host "  [ERROR] No se pudo descargar rustup." -ForegroundColor Red
+        Write-Host "  [INFO] Descarga manualmente desde: https://rustup.rs" -ForegroundColor Cyan
         Pause-Script
         return
     }
@@ -83,20 +92,40 @@ $KodyDir = "$HOME\kody"
 $ProjectDir = "$KodyDir\kody"
 
 if (Test-Path "$ProjectDir\.git") {
-    Write-Host "  [INFO] Actualizando repositorio..." -ForegroundColor Cyan
+    Write-Host "  [INFO] Repositorio existe. Actualizando..." -ForegroundColor Cyan
     Set-Location $ProjectDir
-    git pull origin main 2>$null
-} else {
-    if (Test-Path $KodyDir) { Remove-Item -Recurse -Force $KodyDir }
+    $output = git pull origin main 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  [WARN] No se pudo actualizar. Eliminando y clonando de nuevo..." -ForegroundColor Yellow
+        Remove-Item -Recurse -Force $KodyDir -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+    }
+}
+
+if (-not (Test-Path "$ProjectDir\.git")) {
     Write-Host "  [INFO] Clonando repositorio..." -ForegroundColor Cyan
-    git clone https://github.com/yokonad/kody.git $KodyDir 2>$null
+
+    if (Test-Path $KodyDir) {
+        Write-Host "  [INFO] Limpiando directorio anterior..." -ForegroundColor Cyan
+        Remove-Item -Recurse -Force $KodyDir -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+    }
+
+    $output = git clone https://github.com/yokonad/kody.git $KodyDir 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  [ERROR] Error al clonar: $output" -ForegroundColor Red
+        Write-Host "  [INFO] Verifica tu conexion a internet." -ForegroundColor Cyan
+        Pause-Script
+        return
+    }
 }
 
 if (Test-Path $ProjectDir) {
     Set-Location $ProjectDir
     Write-Host "  [OK] Repositorio listo" -ForegroundColor Green
 } else {
-    Write-Host "  [ERROR] Error al descargar." -ForegroundColor Red
+    Write-Host "  [ERROR] Error al descargar repositorio." -ForegroundColor Red
+    Write-Host "  [INFO] Posible problema: $KodyDir" -ForegroundColor Cyan
     Pause-Script
     return
 }
@@ -113,7 +142,7 @@ $env:Path = "$env:CARGO_HOME\bin;" + [System.Environment]::GetEnvironmentVariabl
 
 if (-not (Test-Command cargo)) {
     Write-Host "  [ERROR] Cargo no disponible." -ForegroundColor Red
-    Write-Host "  [INFO] Ejecuta: rustup default stable" -ForegroundColor White
+    Write-Host "  [INFO] Ejecuta en nueva terminal: rustup default stable" -ForegroundColor White
     Pause-Script
     return
 }
@@ -121,7 +150,9 @@ if (-not (Test-Command cargo)) {
 try {
     Set-Location $ProjectDir
     Write-Host "  [INFO] Compilando..." -ForegroundColor Cyan
-    cargo build --release 2>$null
+
+    cargo build --release 2>&1 | ForEach-Object { Write-Host "    $_" }
+
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  [ERROR] Compilacion fallo." -ForegroundColor Red
         Pause-Script
