@@ -12,25 +12,21 @@ function Test-Command($cmd) {
     return $null -ne $null
 }
 
-function Test-CommandFull($cmd) {
-    # Primero probar en PATH
+function Test-CommandInPath($cmd) {
     if (Test-Command $cmd) { return $true }
 
-    # Buscar en rutas comunes de Windows
-    $commonPaths = @(
-        "C:\Program Files\Git\cmd\$cmd.exe",
-        "C:\Program Files (x86)\Git\cmd\$cmd.exe",
-        "$env:ProgramFiles\Git\cmd\$cmd.exe",
-        "$env:LOCALAPPDATA\Programs\Git\$cmd.exe",
-        "$env:ProgramFiles(x86)\Git\cmd\$cmd.exe"
+    $gitPaths = @(
+        "C:\Program Files\Git\cmd",
+        "C:\Program Files (x86)\Git\cmd",
+        "$env:ProgramFiles\Git\cmd",
+        "$env:LOCALAPPDATA\Programs\Git\cmd"
     )
 
-    foreach ($p in $commonPaths) {
-        if (Test-Path $p) {
-            # Agregar al PATH si se encuentra en una ruta no estándar
-            $cmdDir = Split-Path $p -Parent
-            if ($env:Path -notlike "*$cmdDir*") {
-                $env:Path = "$cmdDir;$env:Path"
+    foreach ($gitPath in $gitPaths) {
+        $gitExe = Join-Path $gitPath "$cmd.exe"
+        if (Test-Path $gitExe) {
+            if ($env:Path -notlike "*$gitPath*") {
+                $env:Path = "$gitPath;$env:Path"
             }
             return $true
         }
@@ -57,29 +53,78 @@ function Pause-Script {
     $null = Read-Host
 }
 
-# Verificar git con busqueda extendida
-Write-Host "[INFO] Verificando Git..." -ForegroundColor Cyan
+# =============================================================================
+# PASOS PREVIOS: Git y Rust
+# =============================================================================
+Write-Host "[PRE-INSTALACION] Verificando dependencias..." -ForegroundColor Magenta
 
-if (-not (Test-CommandFull git)) {
-    Write-Host "[ERROR] Git no esta instalado o no esta en el PATH." -ForegroundColor Red
-    Write-Host "[INFO] Descarga Git desde: https://git-scm.com/download/win" -ForegroundColor Cyan
-    Write-Host "[INFO] Durante la instalacion, marca la opcion 'Git from the command line'" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "Despues de instalar Git, cierra esta ventana y abre PowerShell de nuevo." -ForegroundColor Yellow
-    Pause-Script
-    return
+$needsGit = -not (Test-CommandInPath git)
+$needsRust = -not (Test-RustInstalled)
+
+if ($needsGit) {
+    Write-Host "  [INFO] Git no encontrado. Se instalara automaticamente." -ForegroundColor Cyan
 }
 
-Write-Host "  [OK] Git encontrado" -ForegroundColor Green
+if ($needsRust) {
+    Write-Host "  [INFO] Rust no encontrado. Se instalara automaticamente." -ForegroundColor Cyan
+}
 
-# PASO 1: Rust
-Write-Host "[PASO 1] Verificando Rust..." -ForegroundColor Magenta
+Write-Host ""
 
-if (Test-RustInstalled) {
-    $rustVersion = (rustc --version) -replace "rustc ", ""
-    Write-Host "  [OK] Rust instalado: $rustVersion" -ForegroundColor Green
+# Instalar Git
+if ($needsGit) {
+    Write-Host "[PASO 1] Instalando Git..." -ForegroundColor Magenta
+
+    # Intentar con winget primero (Windows 10/11)
+    $wingetAvailable = Test-Command winget
+
+    if ($wingetAvailable) {
+        Write-Host "  [INFO] Usando winget..." -ForegroundColor Cyan
+        winget install --id Git.Git --exact --silent --accept-package-agreements --accept-source-agreements 2>&1 | Out-Null
+        Start-Sleep -Seconds 5
+    } else {
+        # Descargar el instalador portable/minimal
+        Write-Host "  [INFO] Descargando instalador de Git..." -ForegroundColor Cyan
+        $gitInstallerUrl = "https://github.com/git-for-windows/git/releases/download/v2.47.0.windows.1/Git-2.47.0-64-bit.exe"
+        $gitInstallerPath = "$env:TEMP\git-installer.exe"
+
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            Invoke-WebRequest -Uri $gitInstallerUrl -OutFile $gitInstallerPath -UseBasicParsing -TimeoutSec 120
+        } catch {
+            Write-Host "  [ERROR] No se pudo descargar Git." -ForegroundColor Red
+            Write-Host "  [INFO] Instala Git manualmente desde: https://git-scm.com/download/win" -ForegroundColor Cyan
+            Pause-Script
+            return
+        }
+
+        Write-Host "  [INFO] Ejecutando instalador de Git..." -ForegroundColor Cyan
+        Start-Process -FilePath $gitInstallerPath -ArgumentList "/VERYSILENT", "/NORESTART", "/NOCANCEL", "/SP-", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS", "/COMPONENTS=\"cmd,ext,reg\" " -Wait -NoNewWindow
+        Remove-Item $gitInstallerPath -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 5
+    }
+
+    # Recargar PATH
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+
+    if (Test-CommandInPath git) {
+        Write-Host "  [OK] Git instalado: $((git --version) -replace 'git version ')" -ForegroundColor Green
+    } else {
+        Write-Host "  [ERROR] Git no se instalo correctamente." -ForegroundColor Red
+        Write-Host "  [INFO] Instala Git manualmente desde: https://git-scm.com/download/win" -ForegroundColor Cyan
+        Pause-Script
+        return
+    }
 } else {
-    Write-Host "  [INFO] Rust no encontrado. Instalando..." -ForegroundColor Cyan
+    Write-Host "[PASO 1] Git..." -ForegroundColor Magenta
+    Write-Host "  [OK] Git ya instalado" -ForegroundColor Green
+}
+
+Write-Host ""
+
+# Instalar Rust
+if ($needsRust) {
+    Write-Host "[PASO 2] Instalando Rust..." -ForegroundColor Magenta
     Write-Host "  [INFO] Descargando rustup..."
 
     $rustupUrl = "https://win.rustup.rs"
@@ -89,13 +134,13 @@ if (Test-RustInstalled) {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         Invoke-WebRequest -Uri $rustupUrl -OutFile $rustupPath -UseBasicParsing
     } catch {
-        Write-Host "  [ERROR] No se pudo descargar rustup." -ForegroundColor Red
-        Write-Host "  [INFO] Descarga manualmente desde: https://rustup.rs" -ForegroundColor Cyan
+        Write-Host "  [ERROR] No se pudo descargar Rust." -ForegroundColor Red
+        Write-Host "  [INFO] Instala Rust manualmente desde: https://rustup.rs" -ForegroundColor Cyan
         Pause-Script
         return
     }
 
-    Write-Host "  [INFO] Instalando Rust silenciosamente..."
+    Write-Host "  [INFO] Instalando Rust..."
 
     $env:RUSTUP_HOME = "$env:USERPROFILE\.rustup"
     $env:CARGO_HOME = "$env:USERPROFILE\.cargo"
@@ -112,52 +157,48 @@ if (Test-RustInstalled) {
         Write-Host "  [OK] Rust instalado: $rustVersion" -ForegroundColor Green
     } else {
         Write-Host "  [ERROR] Rust no se instalo." -ForegroundColor Red
-        Write-Host "  [INFO] Instala manualmente desde: https://rustup.rs" -ForegroundColor Cyan
+        Write-Host "  [INFO] Instala Rust manualmente desde: https://rustup.rs" -ForegroundColor Cyan
         Pause-Script
         return
     }
+} else {
+    Write-Host "[PASO 2] Rust..." -ForegroundColor Magenta
+    Write-Host "  [OK] Rust ya instalado" -ForegroundColor Green
 }
 
 Write-Host ""
 
-# PASO 2: Repo
-Write-Host "[PASO 2] Descargando Kody..." -ForegroundColor Magenta
+# =============================================================================
+# PASO 3: Repo
+# =============================================================================
+Write-Host "[PASO 3] Descargando Kody..." -ForegroundColor Magenta
 $KodyDir = "$HOME\kody"
 $ProjectDir = "$KodyDir\kody"
 
-# Si el directorio existe, eliminarlo primero
 if (Test-Path $KodyDir) {
     Write-Host "  [INFO] Limpiando instalacion anterior..." -ForegroundColor Cyan
     Remove-Item -Recurse -Force $KodyDir -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
 
-    # Verificar que se eliminó
     if (Test-Path $KodyDir) {
         Write-Host "  [ERROR] No se pudo eliminar $KodyDir" -ForegroundColor Red
-        Write-Host "  [INFO] Cierra cualquier programa que pueda estar usando esa carpeta." -ForegroundColor Cyan
-        Write-Host "  [INFO] Luego cierra esta ventana y vuelve a ejecutar el script." -ForegroundColor Cyan
         Pause-Script
         return
     }
 }
 
-Write-Host "  [INFO] Clonando repositorio (puede tardar un momento)..." -ForegroundColor Cyan
+Write-Host "  [INFO] Clonando repositorio..." -ForegroundColor Cyan
 
-# Clonar con salida de error capturada correctamente
 $cloneResult = git clone --depth 1 https://github.com/yokonad/kody.git $KodyDir 2>&1
 $cloneSuccess = $LASTEXITCODE -eq 0
 
 if (-not $cloneSuccess) {
-    Write-Host "  [ERROR] Error al clonar repositorio (exit code: $LASTEXITCODE)" -ForegroundColor Red
+    Write-Host "  [ERROR] Error al clonar (exit code: $LASTEXITCODE)" -ForegroundColor Red
     if ($cloneResult) {
-        Write-Host "  Detalles:" -ForegroundColor Red
         foreach ($line in $cloneResult) {
             Write-Host "    $line" -ForegroundColor Yellow
         }
     }
-    Write-Host "  [INFO] Verifica tu conexion a internet." -ForegroundColor Cyan
-    Write-Host "  [INFO] Prueba manualmente en otra terminal:" -ForegroundColor Cyan
-    Write-Host "    git clone https://github.com/yokonad/kody.git" -ForegroundColor White
     Pause-Script
     return
 }
@@ -165,15 +206,17 @@ if (-not $cloneSuccess) {
 if (Test-Path $ProjectDir) {
     Write-Host "  [OK] Repositorio listo" -ForegroundColor Green
 } else {
-    Write-Host "  [ERROR] El repositorio no se descargo correctamente." -ForegroundColor Red
+    Write-Host "  [ERROR] El repositorio no se descargo." -ForegroundColor Red
     Pause-Script
     return
 }
 
 Write-Host ""
 
-# PASO 3: Compilar
-Write-Host "[PASO 3] Compilando Kody..." -ForegroundColor Magenta
+# =============================================================================
+# PASO 4: Compilar
+# =============================================================================
+Write-Host "[PASO 4] Compilando Kody..." -ForegroundColor Magenta
 Write-Host "  [INFO] Esto puede tomar 5-15 minutos..." -ForegroundColor Cyan
 
 $env:CARGO_HOME = "$env:USERPROFILE\.cargo"
@@ -182,7 +225,6 @@ $env:Path = "$env:CARGO_HOME\bin;" + [System.Environment]::GetEnvironmentVariabl
 
 if (-not (Test-Command cargo)) {
     Write-Host "  [ERROR] Cargo no disponible." -ForegroundColor Red
-    Write-Host "  [INFO] Ejecuta en nueva terminal: rustup default stable" -ForegroundColor White
     Pause-Script
     return
 }
@@ -214,8 +256,10 @@ if (Test-Path "target\release\kody.exe") {
 
 Write-Host ""
 
-# PASO 4: Instalar
-Write-Host "[PASO 4] Instalando..." -ForegroundColor Magenta
+# =============================================================================
+# PASO 5: Instalar
+# =============================================================================
+Write-Host "[PASO 5] Instalando..." -ForegroundColor Magenta
 $BinDir = "$env:LOCALAPPDATA\bin\kody"
 $BinPath = "$BinDir\kody.exe"
 
