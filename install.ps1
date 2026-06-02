@@ -7,6 +7,8 @@ Write-Host ""
 Write-Host "KODY - Scanner de Vulnerabilidades CLI" -ForegroundColor Cyan
 Write-Host ""
 
+$DebugMode = $true  # Cambiar a $false para produccion
+
 function Test-Command($cmd) {
     $null = Get-Command $cmd -ErrorAction SilentlyContinue
     return $null -ne $null
@@ -53,8 +55,14 @@ function Pause-Script {
     $null = Read-Host
 }
 
+function Write-Debug($msg) {
+    if ($DebugMode) {
+        Write-Host "  [DEBUG] $msg" -ForegroundColor DarkGray
+    }
+}
+
 # =============================================================================
-# PASOS PREVIOS: Git y Rust
+# PRE-INSTALACION
 # =============================================================================
 Write-Host "[PRE-INSTALACION] Verificando dependencias..." -ForegroundColor Magenta
 
@@ -62,11 +70,11 @@ $needsGit = -not (Test-CommandInPath git)
 $needsRust = -not (Test-RustInstalled)
 
 if ($needsGit) {
-    Write-Host "  [INFO] Git no encontrado. Se instalara automaticamente." -ForegroundColor Cyan
+    Write-Host "  [INFO] Git no encontrado. Se instalara." -ForegroundColor Cyan
 }
 
 if ($needsRust) {
-    Write-Host "  [INFO] Rust no encontrado. Se instalara automaticamente." -ForegroundColor Cyan
+    Write-Host "  [INFO] Rust no encontrado. Se instalara." -ForegroundColor Cyan
 }
 
 Write-Host ""
@@ -75,7 +83,6 @@ Write-Host ""
 if ($needsGit) {
     Write-Host "[PASO 1] Instalando Git..." -ForegroundColor Magenta
 
-    # Intentar con winget primero (Windows 10/11)
     $wingetAvailable = Test-Command winget
 
     if ($wingetAvailable) {
@@ -83,7 +90,6 @@ if ($needsGit) {
         winget install --id Git.Git --exact --silent --accept-package-agreements --accept-source-agreements 2>&1 | Out-Null
         Start-Sleep -Seconds 5
     } else {
-        # Descargar el instalador portable/minimal
         Write-Host "  [INFO] Descargando instalador de Git..." -ForegroundColor Cyan
         $gitInstallerUrl = "https://github.com/git-for-windows/git/releases/download/v2.47.0.windows.1/Git-2.47.0-64-bit.exe"
         $gitInstallerPath = "$env:TEMP\git-installer.exe"
@@ -93,31 +99,29 @@ if ($needsGit) {
             Invoke-WebRequest -Uri $gitInstallerUrl -OutFile $gitInstallerPath -UseBasicParsing -TimeoutSec 120
         } catch {
             Write-Host "  [ERROR] No se pudo descargar Git." -ForegroundColor Red
-            Write-Host "  [INFO] Instala Git manualmente desde: https://git-scm.com/download/win" -ForegroundColor Cyan
             Pause-Script
             return
         }
 
-        Write-Host "  [INFO] Ejecutando instalador de Git..." -ForegroundColor Cyan
-        Start-Process -FilePath $gitInstallerPath -ArgumentList "/VERYSILENT", "/NORESTART", "/NOCANCEL", "/SP-", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS", "/COMPONENTS=\"cmd,ext,reg\" " -Wait -NoNewWindow
+        Write-Host "  [INFO] Ejecutando instalador..." -ForegroundColor Cyan
+        Start-Process -FilePath $gitInstallerPath -ArgumentList "/VERYSILENT", "/NORESTART", "/NOCANCEL", "/SP-" -Wait -NoNewWindow
         Remove-Item $gitInstallerPath -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 5
     }
 
-    # Recargar PATH
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
     if (Test-CommandInPath git) {
         Write-Host "  [OK] Git instalado: $((git --version) -replace 'git version ')" -ForegroundColor Green
     } else {
-        Write-Host "  [ERROR] Git no se instalo correctamente." -ForegroundColor Red
+        Write-Host "  [ERROR] Git no se instalo." -ForegroundColor Red
         Write-Host "  [INFO] Instala Git manualmente desde: https://git-scm.com/download/win" -ForegroundColor Cyan
         Pause-Script
         return
     }
 } else {
     Write-Host "[PASO 1] Git..." -ForegroundColor Magenta
-    Write-Host "  [OK] Git ya instalado" -ForegroundColor Green
+    Write-Host "  [OK] Git ya instalado: $((git --version) -replace 'git version ')" -ForegroundColor Green
 }
 
 Write-Host ""
@@ -125,7 +129,7 @@ Write-Host ""
 # Instalar Rust
 if ($needsRust) {
     Write-Host "[PASO 2] Instalando Rust..." -ForegroundColor Magenta
-    Write-Host "  [INFO] Descargando rustup..."
+    Write-Host "  [INFO] Descargando rustup..." -ForegroundColor Cyan
 
     $rustupUrl = "https://win.rustup.rs"
     $rustupPath = "$env:TEMP\rustup-init.exe"
@@ -140,7 +144,7 @@ if ($needsRust) {
         return
     }
 
-    Write-Host "  [INFO] Instalando Rust..."
+    Write-Host "  [INFO] Instalando Rust..." -ForegroundColor Cyan
 
     $env:RUSTUP_HOME = "$env:USERPROFILE\.rustup"
     $env:CARGO_HOME = "$env:USERPROFILE\.cargo"
@@ -153,8 +157,7 @@ if ($needsRust) {
     $env:Path = "$env:CARGO_HOME\bin;" + [System.Environment]::GetEnvironmentVariable("Path", "User") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "Machine")
 
     if (Test-RustInstalled) {
-        $rustVersion = (rustc --version) -replace "rustc ", ""
-        Write-Host "  [OK] Rust instalado: $rustVersion" -ForegroundColor Green
+        Write-Host "  [OK] Rust instalado: $((rustc --version) -replace 'rustc ')" -ForegroundColor Green
     } else {
         Write-Host "  [ERROR] Rust no se instalo." -ForegroundColor Red
         Write-Host "  [INFO] Instala Rust manualmente desde: https://rustup.rs" -ForegroundColor Cyan
@@ -163,7 +166,7 @@ if ($needsRust) {
     }
 } else {
     Write-Host "[PASO 2] Rust..." -ForegroundColor Magenta
-    Write-Host "  [OK] Rust ya instalado" -ForegroundColor Green
+    Write-Host "  [OK] Rust ya instalado: $((rustc --version) -replace 'rustc ')" -ForegroundColor Green
 }
 
 Write-Host ""
@@ -172,45 +175,87 @@ Write-Host ""
 # PASO 3: Repo
 # =============================================================================
 Write-Host "[PASO 3] Descargando Kody..." -ForegroundColor Magenta
+
 $KodyDir = "$HOME\kody"
 $ProjectDir = "$KodyDir\kody"
 
+Write-Debug "KodyDir: $KodyDir"
+Write-Debug "Git location: $((Get-Command git -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source))"
+Write-Debug "Git version: $(git --version)"
+
+# Limpiar instalacion anterior
 if (Test-Path $KodyDir) {
     Write-Host "  [INFO] Limpiando instalacion anterior..." -ForegroundColor Cyan
+    Write-Debug "Eliminando: $KodyDir"
     Remove-Item -Recurse -Force $KodyDir -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
 
     if (Test-Path $KodyDir) {
         Write-Host "  [ERROR] No se pudo eliminar $KodyDir" -ForegroundColor Red
+        Write-Debug "Todavia existe dopo Remove-Item"
         Pause-Script
         return
     }
+    Write-Debug "Eliminacion exitosa"
 }
 
 Write-Host "  [INFO] Clonando repositorio..." -ForegroundColor Cyan
+Write-Debug "Comando: git clone --depth 1 https://github.com/yokonad/kody.git $KodyDir"
 
-$cloneResult = git clone --depth 1 https://github.com/yokonad/kody.git $KodyDir 2>&1
-$cloneSuccess = $LASTEXITCODE -eq 0
+# Clonar repositorio
+$gitExitCode = 0
+$gitOutput = ""
 
-if (-not $cloneSuccess) {
-    Write-Host "  [ERROR] Error al clonar (exit code: $LASTEXITCODE)" -ForegroundColor Red
-    if ($cloneResult) {
-        foreach ($line in $cloneResult) {
-            Write-Host "    $line" -ForegroundColor Yellow
+try {
+    # Ejecutar git clone
+    $gitResult = & git clone --depth 1 https://github.com/yokonad/kody.git $KodyDir 2>&1
+    $gitExitCode = $LASTEXITCODE
+    $gitOutput = $gitResult | Out-String
+
+    Write-Debug "Git exit code: $gitExitCode"
+    if ($gitOutput) {
+        Write-Debug "Git output:"
+        $gitOutput -split "`n" | Where-Object { $_.Trim() } | ForEach-Object {
+            Write-Debug "  $_"
         }
     }
+} catch {
+    Write-Debug "Excepcion durante git clone: $_"
+    $gitExitCode = 1
+}
+
+if ($gitExitCode -ne 0) {
+    Write-Host "  [ERROR] Error al clonar repositorio (exit code: $gitExitCode)" -ForegroundColor Red
+    Write-Debug "No se pudo clonar el repositorio"
+    Write-Debug "Verifica tu conexion a internet"
+    Write-Debug "URL: https://github.com/yokonad/kody"
     Pause-Script
     return
 }
 
-if (Test-Path $ProjectDir) {
-    Write-Host "  [OK] Repositorio listo" -ForegroundColor Green
+# Verificar que se descargo - git clone crea el directorio directamente
+Write-Debug "Verificando descarga en: $KodyDir"
+
+if (Test-Path $KodyDir) {
+    $contents = Get-ChildItem $KodyDir -ErrorAction SilentlyContinue
+    Write-Debug "Contenido de $KodyDir : $($contents.Count) items"
+
+    if ($contents.Count -eq 0) {
+        Write-Host "  [ERROR] El repositorio esta vacio." -ForegroundColor Red
+        Pause-Script
+        return
+    }
+
+    # El repositorio clonado esta en $KodyDir directamente (no en subdirectorio)
+    Write-Debug "Repositorio clonado correctamente en $KodyDir"
 } else {
     Write-Host "  [ERROR] El repositorio no se descargo." -ForegroundColor Red
+    Write-Debug "$KodyDir no existe despues de git clone"
     Pause-Script
     return
 }
 
+Write-Host "  [OK] Repositorio listo" -ForegroundColor Green
 Write-Host ""
 
 # =============================================================================
@@ -225,31 +270,38 @@ $env:Path = "$env:CARGO_HOME\bin;" + [System.Environment]::GetEnvironmentVariabl
 
 if (-not (Test-Command cargo)) {
     Write-Host "  [ERROR] Cargo no disponible." -ForegroundColor Red
+    Write-Debug "cargo no encontrado en PATH"
     Pause-Script
     return
 }
 
+Write-Debug "Cargo disponible: $(cargo --version)"
+
 try {
-    Set-Location $ProjectDir
+    Set-Location $KodyDir
     Write-Host "  [INFO] Compilando..." -ForegroundColor Cyan
+    Write-Debug "Working directory: $(Get-Location)"
 
     cargo build --release 2>&1 | ForEach-Object { Write-Host "    $_" }
 
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  [ERROR] Compilacion fallo." -ForegroundColor Red
+        Write-Debug "cargo build retorno exit code: $LASTEXITCODE"
         Pause-Script
         return
     }
 } catch {
-    Write-Host "  [ERROR] Error: $_" -ForegroundColor Red
+    Write-Host "  [ERROR] Error durante compilacion: $_" -ForegroundColor Red
     Pause-Script
     return
 }
 
-if (Test-Path "target\release\kody.exe") {
+if (Test-Path "$KodyDir\target\release\kody.exe") {
     Write-Host "  [OK] Compilacion exitosa!" -ForegroundColor Green
+    Write-Debug "Binario creado: $KodyDir\target\release\kody.exe"
 } else {
     Write-Host "  [ERROR] kody.exe no encontrado." -ForegroundColor Red
+    Write-Debug "No se encontro $KodyDir\target\release\kody.exe"
     Pause-Script
     return
 }
@@ -267,7 +319,7 @@ if (-not (Test-Path $BinDir)) {
     New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
 }
 
-Copy-Item "target\release\kody.exe" $BinPath -Force
+Copy-Item "$KodyDir\target\release\kody.exe" $BinPath -Force
 Write-Host "  [OK] Kody instalado en: $BinPath" -ForegroundColor Green
 
 $UserPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
