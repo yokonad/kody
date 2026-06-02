@@ -28,11 +28,9 @@ irm https://raw.githubusercontent.com/yokonad/kody/main/install.ps1 | iex
 ---
 
 El script de instalación:
-1. Verifica si tienes Rust instalado
-2. Si no lo tienes, lo instala automáticamente
-3. Clona el repositorio
-4. Compila el proyecto
-5. Instala el binario en tu PATH
+1. Descarga el binario pre-compilado desde GitHub Releases (~10 segundos)
+2. Extrae el binario y lo instala en tu `PATH`
+3. **No requiere Rust, Git, ni compilación**
 
 ---
 
