@@ -11,36 +11,64 @@ Herramienta CLI desarrollada en Rust para escaneo de vulnerabilidades con integr
 - **Modo Sin Conexión** - Funciona sin internet usando patrones de vulnerabilidades cacheados
 - **Multiplataforma** - Funciona en Linux, macOS y Windows
 
-## Requisitos
+## Instalación con Un Solo Comando
 
-- Rust 1.70+ ([instalar Rust](https://rustup.rs))
-- SQLite (generalmente preinstalado en Linux/macOS)
-- Acceso a la red para realizar escaneos
+### Linux / macOS
 
-## Instalación
+```bash
+curl -fsSL https://raw.githubusercontent.com/yokonad/kody/main/install.sh | bash
+```
 
-### Linux / macOS (desde código fuente)
+### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/yokonad/kody/main/install.ps1 | iex
+```
+
+---
+
+El script de instalación:
+1. Verifica si tienes Rust instalado
+2. Si no lo tienes, lo instala automáticamente
+3. Clona el repositorio
+4. Compila el proyecto
+5. Instala el binario en tu PATH
+
+---
+
+## Instalación Manual (desde código fuente)
+
+### Linux / macOS
 
 ```bash
 # Clonar el repositorio
 git clone https://github.com/yokonad/kody.git
 cd kody/kody
 
-# Compilar versión de producción
+# Instalar Rust si no lo tienes
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+
+# Compilar
 cargo build --release
 
 # Ejecutar
 ./target/release/kody --help
 ```
 
-### Windows (desde código fuente)
+### Windows
 
 ```powershell
+# En PowerShell (como administrador)
+
+# Instalar Rust si no lo tienes
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+
 # Clonar el repositorio
 git clone https://github.com/yokonad/kody.git
 cd kody/kody
 
-# Compilar versión de producción (requiere Rust)
+# Compilar
 cargo build --release
 
 # Ejecutar
@@ -51,16 +79,16 @@ cargo build --release
 
 ```bash
 # Ver todos los comandos disponibles
-./target/release/kody --help
+kody --help
 
 # Escanear un objetivo específico
-./target/release/kody scan 192.168.1.1 --ports 1-1024
+kody scan 192.168.1.1 --ports 1-1024
 
 # Auto-descubrir y escanear tu red
-./target/release/kody auto-scan
+kody auto-scan
 
 # Mapear IPs ocultas en tu red
-./target/release/kody map-hidden --range 192.168.1.0/24
+kody map-hidden --range 192.168.1.0/24
 ```
 
 ## Comandos
@@ -138,7 +166,8 @@ kody/
 │   ├── network/        # Descubrimiento de red
 │   ├── db/             # Cache offline con SQLite
 │   └── config/         # Gestión de configuración
-└── Cargo.toml          # Dependencias Rust
+├── install.sh          # Script de instalación para Linux/macOS
+└── install.ps1         # Script de instalación para Windows
 ```
 
 ## Nota de Seguridad

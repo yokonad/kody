@@ -1,113 +1,168 @@
-#!/usr/bin/env bash
-# Kody Installer - Bootstrap script for cross-platform CLI installation
-# Usage: curl -fsSL https://kody.dev/install | sh
-# Windows: iwr https://kody.dev/install | iex
+#!/bin/bash
+# =============================================================================
+# Kody - Script de Instalación
+# =============================================================================
+# Instalación con un solo comando:
+#   curl -fsSL https://raw.githubusercontent.com/yokonad/kody/main/install.sh | bash
+# =============================================================================
 
 set -e
 
-KODY_VERSION="0.1.0"
-INSTALL_DIR="${HOME}/.kody/bin"
-RELEASES_URL="https://github.com/kody-team/kody/releases/latest/download"
+# Colores
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+RESET='\033[0m'
 
-detect_os() {
-    case "$(uname -s)" in
-        Linux*)     echo "linux" ;;
-        Darwin*)    echo "darwin" ;;
-        CYGWIN*|MSYS*|MINGW*) echo "windows" ;;
-        *)          echo "unsupported" ;;
-    esac
+# Banner
+show_banner() {
+    echo -e "${CYAN}"
+    echo "╔══════════════════════════════════════════════════════════════════╗"
+    echo "║                                                                  ║"
+    echo "║                            ${RED}KODY${CYAN}                           ║"
+    echo "║                                                                  ║"
+    echo "║                ${YELLOW}Scanner de Vulnerabilidades CLI${CYAN}              ║"
+    echo "║                      ${YELLOW}Desarrollado en Rust${CYAN}                   ║"
+    echo "║                                                                  ║"
+    echo "╚══════════════════════════════════════════════════════════════════╝"
+    echo -e "${RESET}"
 }
 
-detect_arch() {
-    case "$(uname -m)" in
-        x86_64)     echo "amd64" ;;
-        aarch64|arm64) echo "arm64" ;;
-        i386|i686)  echo "386" ;;
-        *)          echo "amd64" ;;
-    esac
+# Verificar si el comando existe
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
 }
 
-install_kody() {
-    local os=$(detect_os)
-    local arch=$(detect_arch)
-
-    if [ "$os" == "unsupported" ]; then
-        echo "Error: Unsupported operating system"
-        exit 1
+# Verificar e instalar Rust
+install_rust() {
+    if command_exists rustc && command_exists cargo; then
+        echo -e "${GREEN}✓${RESET} Rust ya está instalado: $(rustc --version | cut -d' ' -f2)"
+        return 0
     fi
 
-    echo "[*] Detected OS: $os ($arch)"
+    echo -e "${YELLOW}▸${RESET} Rust no encontrado. Instalando Rust..."
 
-    # Create install directory
-    mkdir -p "$INSTALL_DIR"
-
-    local binary_name="kody-${os}-${arch}"
-    local extension=""
-    if [ "$os" == "windows" ]; then
-        extension=".exe"
-        binary_name="${binary_name}.exe"
-    fi
-
-    local download_url="${RELEASES_URL}/${binary_name}"
-    local target_path="${INSTALL_DIR}/kody${extension}"
-
-    echo "[*] Downloading from: $download_url"
-    echo "[*] Installing to: $target_path"
-
-    # Download binary
-    if command -v curl > /dev/null 2>&1; then
-        curl -fsSL "$download_url" -o "$target_path"
-    elif command -v wget > /dev/null 2>&1; then
-        wget -q "$download_url" -O "$target_path"
+    # Instalar rustup
+    if command_exists curl; then
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    elif command_exists wget; then
+        wget -qO- https://sh.rustup.rs | sh -s -- -y
     else
-        echo "Error: curl or wget is required"
+        echo -e "${RED}✗${RESET} Necesitas curl o wget para instalar Rust."
+        echo "   Instala curl/wget primero, o instala Rust manualmente desde https://rustup.rs"
         exit 1
     fi
 
-    # Make executable
-    chmod +x "$target_path"
-
-    # Add to PATH if not already there
-    local path_entry="export PATH=\"\$PATH:${INSTALL_DIR}\""
-    local shell_rc=""
-
-    case "$(basename "${SHELL:-bash}")" in
-        bash) shell_rc="${HOME}/.bashrc" ;;
-        zsh) shell_rc="${HOME}/.zshrc" ;;
-        fish) shell_rc="${HOME}/.config/fish/config.fish" ;;
-        *) shell_rc="${HOME}/.profile" ;;
-    esac
-
-    if ! grep -q "$INSTALL_DIR" "$shell_rc" 2>/dev/null; then
-        echo "[*] Adding ${INSTALL_DIR} to PATH in $shell_rc"
-        echo "$path_entry" >> "$shell_rc"
-        echo "[*] Run 'source $shell_rc' or start a new shell to use kody"
+    # Cargar entorno de Rust
+    if [ -f "$HOME/.cargo/env" ]; then
+        source "$HOME/.cargo/env"
     fi
 
+    # Verificar instalación
+    if command_exists rustc && command_exists cargo; then
+        echo -e "${GREEN}✓${RESET} Rust instalado correctamente: $(rustc --version | cut -d' ' -f2)"
+    else
+        echo -e "${RED}✗${RESET} Error al instalar Rust."
+        echo "   Por favor, instala Rust manualmente desde https://rustup.rs"
+        exit 1
+    fi
+}
+
+# Clonar o actualizar repositorio
+setup_repo() {
+    KODY_DIR="$HOME/kody"
+
+    if [ -d "$KODY_DIR/.git" ]; then
+        echo -e "${YELLOW}▸${RESET} Actualizando repositorio existente..."
+        cd "$KODY_DIR"
+        git pull origin main 2>/dev/null || git pull origin master 2>/dev/null || true
+    else
+        echo -e "${YELLOW}▸${RESET} Clonando repositorio..."
+        git clone https://github.com/yokonad/kody.git "$KODY_DIR"
+        cd "$KODY_DIR"
+    fi
+
+    echo -e "${GREEN}✓${RESET} Repositorio listo en: $KODY_DIR"
+}
+
+# Compilar proyecto
+build_project() {
+    echo -e "${YELLOW}▸${RESET} Compilando proyecto (esto puede tomar unos minutos)..."
+
+    # Cargar entorno de Rust si es necesario
+    if [ -f "$HOME/.cargo/env" ]; then
+        source "$HOME/.cargo/env"
+    fi
+
+    cd kody
+
+    # Compilar con optimizations
+    cargo build --release 2>&1 | tail -5
+
+    if [ -f "target/release/kody" ]; then
+        echo -e "${GREEN}✓${RESET} Compilación exitosa!"
+    else
+        echo -e "${RED}✗${RESET} Error en la compilación."
+        exit 1
+    fi
+}
+
+# Crear enlace simbólico global
+install_binary() {
+    BIN_PATH="$HOME/.local/bin/kody"
+
+    # Crear directorio si no existe
+    mkdir -p "$HOME/.local/bin"
+
+    # Copiar binario
+    cp "target/release/kody" "$BIN_PATH"
+    chmod +x "$BIN_PATH"
+
+    # Agregar al PATH si es necesario
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+        SHELL_RC="$HOME/.bashrc"
+        [ -f "$HOME/.zshrc" ] && SHELL_RC="$HOME/.zshrc"
+
+        if ! grep -q '.local/bin' "$SHELL_RC" 2>/dev/null; then
+            echo '' >> "$SHELL_RC"
+            echo '# Kody binary' >> "$SHELL_RC"
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$SHELL_RC"
+        fi
+        export PATH="$HOME/.local/bin:$PATH"
+    fi
+
+    echo -e "${GREEN}✓${RESET} Kody instalado en: $BIN_PATH"
+}
+
+# Función principal
+main() {
+    show_banner
+
+    echo -e "${BLUE}▸${RESET} Iniciando instalación de Kody..."
     echo ""
-    echo "[+] Installation complete!"
-    echo "[*] Run 'kody --help' to get started"
+
+    install_rust
+    setup_repo
+    build_project
+    install_binary
+
+    echo ""
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════════════${RESET}"
+    echo -e "${GREEN}  ✓${RESET} ¡Instalación completada!${GREEN}                                            ║${RESET}"
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════════════${RESET}"
+    echo ""
+    echo -e "Para usar Kody, ejecuta:"
+    echo -e "  ${CYAN}kody --help${RESET}"
+    echo ""
+    echo -e "O desde el directorio:"
+    echo -e "  ${CYAN}~/kody/kody/target/release/kody --help${RESET}"
+    echo ""
+    echo -e "${YELLOW}Nota:${RESET} Si 'kody' no funciona inmediatamente, reinicia tu terminal"
+    echo "      o ejecuta: ${CYAN}source ~/.bashrc${RESET}"
     echo ""
 }
 
-# Check for updates
-check_version() {
-    echo "Kody v${KODY_VERSION}"
-}
-
-# Main
-case "${1:-}" in
-    --version|-v) check_version ;;
-    --help|-h)
-        echo "Kody Installer"
-        echo "Usage: curl -fsSL https://kody.dev/install | sh"
-        echo ""
-        echo "Options:"
-        echo "  --version, -v  Show version"
-        echo "  --help, -h     Show this help"
-        ;;
-    *)
-        echo "Installing Kody v${KODY_VERSION}..."
-        install_kody
-        ;;
-esac
+# Ejecutar
+main "$@"

@@ -1,98 +1,170 @@
-#!/usr/bin/env pwsh
-# Kody Installer - PowerShell bootstrap script for Windows
-# Usage: iwr https://kody.dev/install | iex
-# Or:   irm https://kody.dev/install | iex
+# =============================================================================
+# Kody - Script de Instalación para Windows
+# =============================================================================
+# Instalación con un solo comando (PowerShell):
+#   irm https://raw.githubusercontent.com/yokonad/kody/main/install.ps1 | iex
+# =============================================================================
 
 $ErrorActionPreference = "Stop"
 
-$KODY_VERSION = "0.1.0"
-$INSTALL_DIR = "$env:USERPROFILE\.kody\bin"
-$RELEASES_URL = "https://github.com/kody-team/kody/releases/latest/download"
-
-function Detect-OS {
-    if ($env:OS -eq "Windows_NT") {
-        return "windows"
-    }
-    return "unsupported"
+# Colores para la consola
+function Write-Banner {
+    Write-Host ""
+    Write-Host "+============================================================+" -ForegroundColor Cyan
+    Write-Host "|                                                          |" -ForegroundColor Cyan
+    Write-Host "|                       KODY                               |" -ForegroundColor Red
+    Write-Host "|                                                          |" -ForegroundColor Cyan
+    Write-Host "|              Scanner de Vulnerabilidades CLI              |" -ForegroundColor Yellow
+    Write-Host "|                    Desarrollado en Rust                   |" -ForegroundColor Yellow
+    Write-Host "|                                                          |" -ForegroundColor Cyan
+    Write-Host "+============================================================+" -ForegroundColor Cyan
+    Write-Host ""
 }
 
-function Detect-Arch {
-    switch ($env:PROCESSOR_ARCHITECTURE) {
-        "AMD64" { return "amd64" }
-        "ARM64" { return "arm64" }
-        "X86"   { return "386" }
-        default { return "amd64" }
-    }
+# Verificar si el comando existe
+function Test-Command($cmd) {
+    $null = Get-Command $cmd -ErrorAction SilentlyContinue
+    return $null -ne $null
 }
 
-function Install-Kody {
-    $os = Detect-OS
-    $arch = Detect-Arch
+# Verificar e instalar Rust
+function Install-Rust {
+    if (Test-Command rustc) {
+        $version = rustc --version | ForEach-Object { $_ -split ' ' | Select-Object -First 2 -Skip 1 }
+        Write-Host "[OK] Rust ya esta instalado: $version" -ForegroundColor Green
+        return
+    }
 
-    if ($os -eq "unsupported") {
-        Write-Error "Unsupported operating system"
+    Write-Host "[INFO] Rust no encontrado. Instalando Rust..." -ForegroundColor Yellow
+
+    # Instalar rustup via curl o descargando
+    if (Test-Command curl) {
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    } elseif (Test-Command git) {
+        # Descargar rustup-init.exe
+        $rustupUrl = "https://win.rustup.rs"
+        $rustupPath = "$env:TEMP\rustup-init.exe"
+
+        Write-Host "[INFO] Descargando rustup..." -ForegroundColor Yellow
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri $rustupUrl -OutFile $rustupPath
+
+        Write-Host "[INFO] Ejecutando rustup..." -ForegroundColor Yellow
+        & $rustupPath -y
+
+        Remove-Item $rustupPath -Force
+    } else {
+        Write-Host "[ERROR] Necesitas curl o git para instalar Rust." -ForegroundColor Red
+        Write-Host "        Instala git desde: https://git-scm.com/download/win" -ForegroundColor Red
         exit 1
     }
 
-    Write-Host "[*] Detected OS: $os ($arch)" -ForegroundColor Cyan
+    # Refrescar entorno
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
-    # Create install directory
-    if (-not (Test-Path $INSTALL_DIR)) {
-        New-Item -ItemType Directory -Path $INSTALL_DIR -Force | Out-Null
+    if (Test-Command rustc) {
+        Write-Host "[OK] Rust instalado correctamente: $(rustc --version)" -ForegroundColor Green
+    } else {
+        Write-Host "[ERROR] Error al instalar Rust." -ForegroundColor Red
+        Write-Host "        Por favor, instala Rust manualmente desde https://rustup.rs" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# Clonar o actualizar repositorio
+function Get-Repo {
+    $KodyDir = "$HOME\kody"
+
+    if (Test-Path "$KodyDir\.git") {
+        Write-Host "[INFO] Actualizando repositorio existente..." -ForegroundColor Yellow
+        Set-Location $KodyDir
+        git pull origin main 2>$null
+    } else {
+        Write-Host "[INFO] Clonando repositorio..." -ForegroundColor Yellow
+        git clone https://github.com/yokonad/kody.git $KodyDir
+        Set-Location $KodyDir
     }
 
-    $binary_name = "kody-${os}-${arch}.exe"
-    $download_url = "${RELEASES_URL}/${binary_name}"
-    $target_path = Join-Path $INSTALL_DIR "kody.exe"
+    Write-Host "[OK] Repositorio listo en: $KodyDir" -ForegroundColor Green
+}
 
-    Write-Host "[*] Downloading from: $download_url" -ForegroundColor Cyan
-    Write-Host "[*] Installing to: $target_path" -ForegroundColor Cyan
+# Compilar proyecto
+function Build-Project {
+    Write-Host "[INFO] Compilando proyecto (esto puede tomar varios minutos)..." -ForegroundColor Yellow
+
+    Set-Location kody
+
+    # Refrescar PATH
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+
+    # Compilar
+    cargo build --release 2>&1 | Out-Null
+
+    if (Test-Path "target\release\kody.exe") {
+        Write-Host "[OK] Compilacion exitosa!" -ForegroundColor Green
+    } else {
+        Write-Host "[ERROR] Error en la compilacion." -ForegroundColor Red
+        exit 1
+    }
+}
+
+# Instalar binario
+function Install-Binary {
+    $BinDir = "$env:LOCALAPPDATA\bin\kody"
+    $BinPath = "$BinDir\kody.exe"
+
+    # Crear directorio si no existe
+    if (-not (Test-Path $BinDir)) {
+        New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
+    }
+
+    # Copiar binario
+    Copy-Item "target\release\kody.exe" $BinPath -Force
+    Write-Host "[OK] Kody instalado en: $BinPath" -ForegroundColor Green
+
+    # Agregar al PATH del usuario si es necesario
+    $UserPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+    if ($UserPath -notlike "*$BinDir*") {
+        [System.Environment]::SetEnvironmentVariable("Path", "$UserPath;$BinDir", "User")
+        $env:Path = "$UserPath;$BinDir"
+        Write-Host "[INFO] Se agrego $BinDir al PATH del usuario." -ForegroundColor Yellow
+    }
+}
+
+# Función principal
+function Main {
+    Clear-Host
+    Write-Banner
+
+    Write-Host "[INFO] Iniciando instalacion de Kody..." -ForegroundColor Cyan
+    Write-Host ""
 
     try {
-        Invoke-WebRequest -Uri $download_url -OutFile $target_path -UseBasicParsing
-    } catch {
-        Write-Error "Failed to download: $_"
+        Install-Rust
+        Get-Repo
+        Build-Project
+        Install-Binary
+
+        Write-Host ""
+        Write-Host "+============================================================+" -ForegroundColor Green
+        Write-Host "|  [OK] Instalacion completada!                              |" -ForegroundColor Green
+        Write-Host "+============================================================+" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "Para usar Kody, ejecuta:" -ForegroundColor Cyan
+        Write-Host "  kody --help" -ForegroundColor White
+        Write-Host ""
+        Write-Host "O desde el directorio:" -ForegroundColor Cyan
+        Write-Host "  ~\kody\kody\target\release\kody.exe --help" -ForegroundColor White
+        Write-Host ""
+        Write-Host "[NOTA] Si 'kody' no funciona inmediatamente, cierra y abre" -ForegroundColor Yellow
+        Write-Host "       PowerShell, o ejecuta: refreshenv" -ForegroundColor Yellow
+        Write-Host ""
+    }
+    catch {
+        Write-Host ""
+        Write-Host "[ERROR] Error durante la instalacion: $_" -ForegroundColor Red
         exit 1
     }
-
-    # Add to PATH for current session
-    $currentPath = $env:PATH
-    if ($currentPath -notlike "*$INSTALL_DIR*") {
-        $env:PATH = "$INSTALL_DIR;$currentPath"
-        Write-Host "[*] Added $INSTALL_DIR to PATH for current session" -ForegroundColor Yellow
-    }
-
-    # Persist to user PATH permanently
-    $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
-    if ($userPath -notlike "*$INSTALL_DIR*") {
-        [Environment]::SetEnvironmentVariable("PATH", "$INSTALL_DIR;$userPath", "User")
-        Write-Host "[*] Added $INSTALL_DIR to user PATH permanently" -ForegroundColor Yellow
-    }
-
-    Write-Host ""
-    Write-Host "[+] Installation complete!" -ForegroundColor Green
-    Write-Host "[*] Run 'kody --help' to get started" -ForegroundColor Cyan
-    Write-Host ""
 }
 
-function Check-Version {
-    Write-Host "Kody v${KODY_VERSION}"
-}
-
-$args = $args[0]
-
-switch ($args) {
-    { $_ -eq "--version" -or $_ -eq "-v" } { Check-Version }
-    { $_ -eq "--help" -or $_ -eq "-h" } {
-        Write-Host "Kody Installer"
-        Write-Host "Usage: irm https://kody.dev/install | iex"
-        Write-Host ""
-        Write-Host "Options:"
-        Write-Host "  --version, -v  Show version"
-        Write-Host "  --help, -h     Show this help"
-    }
-    default {
-        Write-Host "Installing Kody v${KODY_VERSION}..." -ForegroundColor Cyan
-        Install-Kody
-    }
-}
+Main
