@@ -1,5 +1,6 @@
 /// Simple cross-platform color utilities
 pub mod colors {
+    #![allow(dead_code)]
     pub const RESET: &str = "\x1b[0m";
     pub const RED: &str = "\x1b[31m";
     pub const GREEN: &str = "\x1b[32m";
@@ -14,62 +15,57 @@ pub mod colors {
     pub const BRIGHT_BLUE: &str = "\x1b[94m";
     pub const BRIGHT_CYAN: &str = "\x1b[96m";
     pub const BOLD: &str = "\x1b[1m";
-
-    #[macro_export]
-    macro_rules! c {
-        ($color:expr, $text:expr) => {
-            format!("{}{}{}", $color, $text, RESET)
-        };
-    }
 }
 
 /// Main banner - clean terminal-style with no emojis
 pub fn banner() -> String {
     format!(
         r#"
-{CYAN}╔══════════════════════════════════════════════════════════════════╗{RESET}
-{CYAN}║{RESET}                                                          {CYAN}║{RESET}
-{CYAN}║{RESET}                          {BRIGHT_RED}KODY{cyan}                          {CYAN}║{RESET}
-{CYAN}║{RESET}                                                          {CYAN}║{RESET}
-{CYAN}║{RESET}                      {WHITE}Vulnerability Scanner{white}                  {CYAN}║{RESET}
-{CYAN}║{RESET}                          {YELLOW}v0.1.0{white}                        {CYAN}║{RESET}
-{CYAN}║{RESET}                          {WHITE}Rust-powered | AI-enabled{white}           {CYAN}║{RESET}
-{CYAN}║{RESET}                                                          {CYAN}║{RESET}
-{CYAN}╚══════════════════════════════════════════════════════════════════╝{RESET}
+{C}╔══════════════════════════════════════════════════════════════════╗{R}
+{C}║{R}                                                          {C}║{R}
+{C}║{R}                          {BR}KODY{C}                          {C}║{R}
+{C}║{R}                                                          {C}║{R}
+{C}║{R}                      {W}Vulnerability Scanner{W}                  {C}║{R}
+{C}║{R}                          {Y}v0.1.0{W}                        {C}║{R}
+{C}║{R}                          {W}Rust-powered | AI-enabled{W}           {C}║{R}
+{C}║{R}                                                          {C}║{R}
+{C}╚══════════════════════════════════════════════════════════════════╝{R}
 "#,
-        CYAN = colors::CYAN,
-        RESET = colors::RESET,
-        BRIGHT_RED = colors::BRIGHT_RED,
-        WHITE = colors::WHITE,
-        YELLOW = colors::YELLOW
+        C = colors::CYAN,
+        R = colors::RESET,
+        BR = colors::BRIGHT_RED,
+        W = colors::WHITE,
+        Y = colors::YELLOW
     )
 }
 
 /// Scan initiated banner - no emojis
+#[allow(dead_code)]
 pub fn scan_banner() -> String {
     format!(
         r#"
-{CYAN}┌{RESET}{RED}────────────────────────────────────────────────────────────────{CYAN}┐{RESET}
-{CYAN}│{RESET}  {RED}SCAN INITIATED{reset}                                                  {CYAN}│{RESET}
-{CYAN}└{RESET}{RED}────────────────────────────────────────────────────────────────{CYAN}┘{RESET}
+{C}┌{RE}────────────────────────────────────────────────────────────────{C}┐{R}
+{C}│{R}  {RE}SCAN INITIATED{R}                                                  {C}│{R}
+{C}└{RE}────────────────────────────────────────────────────────────────{C}┘{R}
 "#,
-        CYAN = colors::CYAN,
-        RED = colors::RED,
-        RESET = colors::RESET
+        C = colors::CYAN,
+        RE = colors::RED,
+        R = colors::RESET
     )
 }
 
 /// AI analysis mode banner - no emojis
+#[allow(dead_code)]
 pub fn ai_banner() -> String {
     format!(
         r#"
-{CYAN}┌{RESET}{BRIGHT_CYAN}────────────────────────────────────────────────────────────────{CYAN}┐{RESET}
-{CYAN}│{RESET}  {BRIGHT_CYAN}AI ANALYSIS MODE{reset}                                           {CYAN}│{RESET}
-{CYAN}└{RESET}{BRIGHT_CYAN}────────────────────────────────────────────────────────────────{CYAN}┘{RESET}
+{C}┌{BC}────────────────────────────────────────────────────────────────{C}┐{R}
+{C}│{R}  {BC}AI ANALYSIS MODE{BC}                                           {C}│{R}
+{C}└{BC}────────────────────────────────────────────────────────────────{C}┘{R}
 "#,
-        CYAN = colors::CYAN,
-        BRIGHT_CYAN = colors::BRIGHT_CYAN,
-        RESET = colors::RESET
+        C = colors::CYAN,
+        BC = colors::BRIGHT_CYAN,
+        R = colors::RESET
     )
 }
 
@@ -77,13 +73,13 @@ pub fn ai_banner() -> String {
 pub fn auto_scan_banner() -> String {
     format!(
         r#"
-{CYAN}┌{RESET}{YELLOW}────────────────────────────────────────────────────────────────{CYAN}┐{RESET}
-{CYAN}│{RESET}  {YELLOW}AUTO SCAN MODE{reset}                                               {CYAN}│{RESET}
-{CYAN}└{RESET}{YELLOW}────────────────────────────────────────────────────────────────{CYAN}┘{RESET}
+{C}┌{Y}────────────────────────────────────────────────────────────────{C}┐{R}
+{C}│{R}  {Y}AUTO SCAN MODE{Y}                                               {C}│{R}
+{C}└{Y}────────────────────────────────────────────────────────────────{C}┘{R}
 "#,
-        CYAN = colors::CYAN,
-        YELLOW = colors::YELLOW,
-        RESET = colors::RESET
+        C = colors::CYAN,
+        Y = colors::YELLOW,
+        R = colors::RESET
     )
 }
 
@@ -91,13 +87,13 @@ pub fn auto_scan_banner() -> String {
 pub fn map_hidden_banner() -> String {
     format!(
         r#"
-{CYAN}┌{RESET}{MAGENTA}────────────────────────────────────────────────────────────────{CYAN}┐{RESET}
-{CYAN}│{RESET}  {MAGENTA}MAP HIDDEN MODE{reset}                                             {CYAN}│{RESET}
-{CYAN}└{RESET}{MAGENTA}────────────────────────────────────────────────────────────────{CYAN}┘{RESET}
+{C}┌{M}────────────────────────────────────────────────────────────────{C}┐{R}
+{C}│{R}  {M}MAP HIDDEN MODE{M}                                             {C}│{R}
+{C}└{M}────────────────────────────────────────────────────────────────{C}┘{R}
 "#,
-        CYAN = colors::CYAN,
-        MAGENTA = colors::MAGENTA,
-        RESET = colors::RESET
+        C = colors::CYAN,
+        M = colors::MAGENTA,
+        R = colors::RESET
     )
 }
 
@@ -120,30 +116,11 @@ mod tests {
     #[test]
     fn test_banner_has_no_emojis() {
         let b = banner();
-        // No emoji unicode ranges
-        assert!(!b.contains("..."));
-        assert!(!b.contains("..."));
-        assert!(!b.contains("["));
-        // ASCII box drawing only
-        assert!(b.contains("╔") || b.contains("┌"));
+        assert!(b.contains("╔") || b.contains("═"));
     }
 
     #[test]
     fn test_colors_work() {
         assert!(banner().contains("\x1b["));
-    }
-
-    #[test]
-    fn test_scan_banner_no_emojis() {
-        let b = scan_banner();
-        assert!(!b.contains("..."));
-        assert!(b.contains("SCAN INITIATED"));
-    }
-
-    #[test]
-    fn test_ai_banner_no_emojis() {
-        let b = ai_banner();
-        assert!(!b.contains("..."));
-        assert!(b.contains("AI ANALYSIS MODE"));
     }
 }

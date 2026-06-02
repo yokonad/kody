@@ -1,7 +1,8 @@
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
-// Re-export scanner types for convenience
-pub use crate::scanner::{Severity, Vulnerability, ScanResult, ServiceInfo};
+// Re-export scanner types
+pub use crate::scanner::{Severity, Vulnerability};
 
 pub mod openai;
 pub mod offline;
@@ -9,11 +10,30 @@ pub mod offline;
 pub use openai::OpenAiProvider;
 pub use offline::OfflineProvider;
 
+// Types for AI analysis
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScanResult {
+    pub target: String,
+    pub open_ports: Vec<u16>,
+    pub services: Vec<ServiceInfo>,
+    pub vulnerabilities: Vec<Vulnerability>,
+    pub raw_output: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceInfo {
+    pub port: u16,
+    pub service: String,
+    pub version: Option<String>,
+}
+
 /// AI provider trait - implementations must be async and thread-safe
 #[async_trait]
 pub trait AiProvider: Send + Sync {
     async fn analyze(&self, scan_result: ScanResult) -> Result<String, AiError>;
+    #[allow(dead_code)]
     fn name(&self) -> &str;
+    #[allow(dead_code)]
     fn is_configured(&self) -> bool;
 }
 

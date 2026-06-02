@@ -4,6 +4,7 @@ use rusqlite::{Connection, Result as SqliteResult};
 
 /// A cached vulnerability with details
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CachedVuln {
     pub id: i64,
     pub cve_id: Option<String>,
@@ -36,7 +37,7 @@ impl<'a> VulnCache<'a> {
         if let Some(cve) = cve_id {
             let existing: Option<i64> = self.conn.query_row(
                 "SELECT id FROM vulnerability_cache WHERE cve_id = ?1",
-                [cve],
+                rusqlite::params![cve],
                 |row| row.get(0),
             ).ok();
 
@@ -49,7 +50,7 @@ impl<'a> VulnCache<'a> {
                         affected_ports = COALESCE(?3, affected_ports),
                         verified = 1
                     WHERE cve_id = ?4",
-                    [description, severity, affected_ports, cve],
+                    rusqlite::params![description, severity, affected_ports, cve],
                 )?;
                 return Ok(());
             }
@@ -59,13 +60,14 @@ impl<'a> VulnCache<'a> {
         self.conn.execute(
             "INSERT INTO vulnerability_cache (cve_id, description, severity, affected_ports, verified)
             VALUES (?1, ?2, ?3, ?4, 1)",
-            [cve_id, description, severity, affected_ports],
+            rusqlite::params![cve_id, description, severity, affected_ports],
         )?;
 
         Ok(())
     }
 
     /// Get all cached vulnerabilities
+    #[allow(dead_code)]
     pub fn get_known_vulnerabilities(&self) -> SqliteResult<Vec<CachedVuln>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, cve_id, description, severity, affected_ports, verified, discovered_at
@@ -89,6 +91,7 @@ impl<'a> VulnCache<'a> {
     }
 
     /// Get vulnerabilities by severity
+    #[allow(dead_code)]
     pub fn get_by_severity(&self, severity: &str) -> SqliteResult<Vec<CachedVuln>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, cve_id, description, severity, affected_ports, verified, discovered_at
@@ -113,6 +116,7 @@ impl<'a> VulnCache<'a> {
     }
 
     /// Get vulnerability by CVE ID
+    #[allow(dead_code)]
     pub fn get_by_cve(&self, cve_id: &str) -> SqliteResult<Option<CachedVuln>> {
         let result = self.conn.query_row(
             "SELECT id, cve_id, description, severity, affected_ports, verified, discovered_at
@@ -140,6 +144,7 @@ impl<'a> VulnCache<'a> {
     }
 
     /// Mark a vulnerability as verified/unverified
+    #[allow(dead_code)]
     pub fn set_verified(&self, id: i64, verified: bool) -> SqliteResult<()> {
         self.conn.execute(
             "UPDATE vulnerability_cache SET verified = ?1 WHERE id = ?2",
@@ -161,11 +166,9 @@ impl<'a> VulnCache<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
 
     fn test_db() -> Connection {
-        let temp_file = NamedTempFile::new().unwrap();
-        let conn = Connection::open(temp_file.path()).unwrap();
+        let conn = Connection::open_in_memory().unwrap();
         crate::db::schema::create_tables(&conn).unwrap();
         conn
     }

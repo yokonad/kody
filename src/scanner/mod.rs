@@ -5,15 +5,12 @@ pub mod ip_scan;
 pub mod auto_scan;
 pub mod hidden_map;
 
-pub use ports::{parse_port_range, tcp_connect, tcp_scan, resolve_host};
+pub use ports::{parse_port_range, tcp_scan, resolve_host};
 pub use vuln_rules::{Severity, Vulnerability, match_rules, get_service_name};
-
-pub use ip_scan::IpScanner;
 pub use auto_scan::AutoScanner;
 pub use hidden_map::HiddenMapper;
 
 use serde::{Deserialize, Serialize};
-
 use crate::ai::{ScanResult, ServiceInfo};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,7 +49,7 @@ impl Scanner {
             .map(|port| ServiceInfo {
                 port: *port,
                 service: get_service_name(*port).to_string(),
-                version: None, // Would need banner grabbing for version detection
+                version: None,
             })
             .collect();
 

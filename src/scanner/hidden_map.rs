@@ -1,6 +1,7 @@
 use crate::ai::{ScanResult, ServiceInfo, Vulnerability, Severity};
-use crate::scanner::{ScanConfig, parse_port_range, get_service_name, match_rules};
+use crate::scanner::{ScanConfig, get_service_name};
 use crate::network::{self, Subnet};
+use std::net::Ipv4Addr;
 
 pub struct HiddenMapper;
 
@@ -135,19 +136,21 @@ fn parse_cidr(cidr: &str) -> Option<network::Subnet> {
 /// Discover hosts with non-standard ports open
 async fn discover_hidden_hosts(subnet: &Subnet, ports: &[u16], config: &ScanConfig) -> Vec<HiddenHost> {
     use tokio::sync::Semaphore;
+    use std::sync::Arc;
 
-    let semaphore = Semaphore::new(config.concurrent.min(50));
+    let semaphore = Arc::new(Semaphore::new(config.concurrent.min(50)));
     let ips = subnet.iter_ips();
+    let ports = ports.to_vec();
+    let timeout_ms = config.timeout_ms;
     let mut handles = Vec::new();
 
     for ip in ips {
-        let permit = semaphore.acquire().await.unwrap();
-        let ports = ports.to_vec();
-        let timeout_ms = config.timeout_ms;
+        let sem = semaphore.clone();
+        let ports = ports.clone();
 
         let handle = tokio::spawn(async move {
+            let _permit = sem.acquire().await.unwrap();
             let open_ports = scan_stealth_ports(&ip.to_string(), &ports, timeout_ms).await;
-            drop(permit);
 
             if open_ports.len() >= 2 {
                 Some(HiddenHost {
@@ -231,6 +234,7 @@ fn analyze_hidden_vulnerabilities(ports: &[u16]) -> Vec<Vulnerability> {
                 description: format!("SSH on non-standard port {} - possible stealth host", port),
                 severity: Severity::Info,
                 affected_port: *port,
+                service: Some("ssh".to_string()),
             });
         }
 
@@ -241,6 +245,7 @@ fn analyze_hidden_vulnerabilities(ports: &[u16]) -> Vec<Vulnerability> {
                 description: format!("Telnet detected on port {} - credentials transmitted in cleartext", port),
                 severity: Severity::High,
                 affected_port: *port,
+                service: Some("telnet".to_string()),
             });
         }
 
@@ -251,6 +256,7 @@ fn analyze_hidden_vulnerabilities(ports: &[u16]) -> Vec<Vulnerability> {
                 description: format!("Suspicious port {} detected - possible backdoor", port),
                 severity: Severity::Critical,
                 affected_port: *port,
+                service: None,
             });
         }
 
@@ -261,6 +267,7 @@ fn analyze_hidden_vulnerabilities(ports: &[u16]) -> Vec<Vulnerability> {
                 description: format!("Database port {} exposed on non-standard configuration", port),
                 severity: Severity::High,
                 affected_port: *port,
+                service: Some("database".to_string()),
             });
         }
     }
@@ -273,6 +280,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore] // Requires network access and can take over 60 seconds
     async fn test_map_hidden_returns_results() {
         let config = ScanConfig {
             target: "192.168.1.0/24".to_string(),

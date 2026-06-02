@@ -9,6 +9,7 @@ mod config;
 mod ai;
 mod scanner;
 mod db;
+mod network;
 
 pub use ascii::banner;
 pub use config::Settings;
@@ -133,7 +134,7 @@ fn main() -> ExitCode {
     match result {
         Ok(_) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("{}{}Error:{} {}", RED, RESET, e);
+            eprintln!("{}Error:{} {}", RED, e, RESET);
             ExitCode::FAILURE
         }
     }
@@ -159,27 +160,25 @@ async fn async_scan(target: &str, ports: &str, ai_analysis: bool, db: Option<&db
 
     // Cache vulnerabilities in DB if available
     if let Some(database) = db {
-        if let Ok(vuln_cache) = Ok(db::VulnCache::new(database.connection())) {
-            for vuln in &result.vulnerabilities {
-                let _ = vuln_cache.cache_vulnerability(
-                    vuln.cve_id.as_deref(),
-                    Some(&vuln.description),
-                    Some(&format!("{}", vuln.severity)),
-                    Some(&vuln.affected_port.to_string()),
-                );
-            }
-        }
-        // Record scan in history
-        if let Ok(history) = Ok(db::ScanHistory::new(database.connection())) {
-            let _ = history.record_scan(
-                target,
-                "scan",
-                Some(ports),
-                result.vulnerabilities.len() as i64,
-                ai_analysis,
-                None,
+        let vuln_cache = db::VulnCache::new(database.connection());
+        for vuln in &result.vulnerabilities {
+            let _ = vuln_cache.cache_vulnerability(
+                vuln.cve_id.as_deref(),
+                Some(&vuln.description),
+                Some(&format!("{}", vuln.severity)),
+                Some(&vuln.affected_port.to_string()),
             );
         }
+        // Record scan in history
+        let history = db::ScanHistory::new(database.connection());
+        let _ = history.record_scan(
+            target,
+            "scan",
+            Some(ports),
+            result.vulnerabilities.len() as i64,
+            ai_analysis,
+            None,
+        );
     }
 
     // Print results
@@ -188,14 +187,14 @@ async fn async_scan(target: &str, ports: &str, ai_analysis: bool, db: Option<&db
     println!("{}│  Open ports: {:?}{}", CYAN, result.open_ports, RESET);
 
     if !result.services.is_empty() {
-        println!("{}│  Services:{}{}", CYAN, RESET);
+        println!("{}│  Services: {}", CYAN, RESET);
         for svc in &result.services {
             println!("{}│    - Port {}: {}{}", CYAN, svc.port, svc.service, RESET);
         }
     }
 
     if !result.vulnerabilities.is_empty() {
-        println!("{}│  Vulnerabilities:{}{}", CYAN, RESET);
+        println!("{}│  Vulnerabilities: {}", CYAN, RESET);
         for vuln in &result.vulnerabilities {
             let color = match vuln.severity {
                 scanner::Severity::Critical => RED,
@@ -228,16 +227,13 @@ async fn async_scan(target: &str, ports: &str, ai_analysis: bool, db: Option<&db
             settings.ai_key.clone()
         } else if let Some(database) = db {
             // Try to get best cached token
-            if let Ok(token_mgr) = Ok(db::TokenManager::new(database.connection())) {
-                if let Ok(Some(cached)) = token_mgr.get_best_token(settings.ai_provider.as_deref().unwrap_or("openai")) {
-                    info!("Using cached token: {}...", cached.token_prefix);
-                    // Note: We can't use the actual token, only the hash
-                    // For security, we require the user to provide the actual token
-                    // The cache just tracks which tokens worked well
-                    None
-                } else {
-                    None
-                }
+            let token_mgr = db::TokenManager::new(database.connection());
+            if let Ok(Some(cached)) = token_mgr.get_best_token(settings.ai_provider.as_deref().unwrap_or("openai")) {
+                info!("Using cached token: {}...", cached.token_prefix);
+                // Note: We can't use the actual token, only the hash
+                // For security, we require the user to provide the actual token
+                // The cache just tracks which tokens worked well
+                None
             } else {
                 None
             }
@@ -245,17 +241,17 @@ async fn async_scan(target: &str, ports: &str, ai_analysis: bool, db: Option<&db
             None
         };
 
-        let provider = ai::create_provider(ai_key.or(settings.ai_key), settings.ai_provider);
+        let ai_key_for_provider = ai_key.or(settings.ai_key.clone());
+        let provider = ai::create_provider(ai_key_for_provider, settings.ai_provider.clone());
         let analysis = provider.analyze(result).await;
 
         // If AI call succeeded and we have the actual key, save to DB
         if let Some(key) = settings.ai_key {
             if let Some(database) = db {
-                if let Ok(token_mgr) = Ok(db::TokenManager::new(database.connection())) {
-                    let provider_name = settings.ai_provider.as_deref().unwrap_or("openai");
-                    let _ = token_mgr.save_successful_token(provider_name, &key);
-                    info!("Saved successful token to cache");
-                }
+                let token_mgr = db::TokenManager::new(database.connection());
+                let provider_name = settings.ai_provider.as_deref().unwrap_or("openai");
+                let _ = token_mgr.save_successful_token(provider_name, &key);
+                info!("Saved successful token to cache");
             }
         }
 
@@ -277,7 +273,7 @@ async fn async_scan(target: &str, ports: &str, ai_analysis: bool, db: Option<&db
     Ok(())
 }
 
-async fn async_auto_scan(interface: Option<&str>, ai_analysis: bool) -> anyhow::Result<()> {
+async fn async_auto_scan(interface: Option<&str>, _ai_analysis: bool) -> anyhow::Result<()> {
     println!("{}", ascii::auto_scan_banner());
 
     if let Some(iface) = interface {
@@ -293,7 +289,7 @@ async fn async_auto_scan(interface: Option<&str>, ai_analysis: bool) -> anyhow::
         concurrent: 50,
     };
 
-    let results = scanner::AutoScanner.scan_network(interface.map(|s| s.to_string()), &config).await;
+    let results = scanner::AutoScanner::scan_network(interface.map(|s| s.to_string()), &config).await;
 
     // Print summary
     println!("\n{}┌─ Auto-Scan Results{}", CYAN, RESET);
@@ -354,7 +350,7 @@ async fn async_map_hidden(range: &str, deep: bool) -> anyhow::Result<()> {
 
     for result in &results {
         println!("{}│{}", CYAN, RESET);
-        println!("{}│  {} - {}{}", CYAN, result.target, result.open_ports.len(), " ports", RESET);
+        println!("{}│  {} - {} ports{}", CYAN, result.target, result.open_ports.len(), RESET);
         for vuln in &result.vulnerabilities {
             let color = match vuln.severity {
                 scanner::Severity::Critical => RED,
@@ -400,15 +396,13 @@ fn handle_config(
             println!("{}│  Database: {}{}", CYAN, path.display(), RESET);
 
             // Get DB stats
-            if let Ok(vuln_cache) = db::VulnCache::new(database.connection()) {
-                if let Ok(count) = vuln_cache.count() {
-                    println!("{}│    - Cached vulnerabilities: {}{}", CYAN, count, RESET);
-                }
+            let vuln_cache = db::VulnCache::new(database.connection());
+            if let Ok(count) = vuln_cache.count() {
+                println!("{}│    - Cached vulnerabilities: {}{}", CYAN, count, RESET);
             }
-            if let Ok(token_mgr) = db::TokenManager::new(database.connection()) {
-                if let Ok(tokens) = token_mgr.get_all_tokens(settings.ai_provider.as_deref().unwrap_or("openai")) {
-                    println!("{}│    - Cached tokens: {}{}", CYAN, tokens.len(), RESET);
-                }
+            let token_mgr = db::TokenManager::new(database.connection());
+            if let Ok(tokens) = token_mgr.get_all_tokens(settings.ai_provider.as_deref().unwrap_or("openai")) {
+                println!("{}│    - Cached tokens: {}{}", CYAN, tokens.len(), RESET);
             }
         } else {
             println!("{}│  Database: not initialized (offline mode){}", CYAN, RESET);

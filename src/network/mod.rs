@@ -3,15 +3,19 @@
 
 pub mod discovery;
 
-pub use discovery::{NetworkInterface, Subnet, discover_hosts, get_local_subnet};
+pub use discovery::{Subnet, discover_hosts, get_local_subnet};
 
 /// Result of scanning a single host
 #[derive(Debug, Clone)]
 pub struct DiscoveredHost {
     pub ip: String,
+    #[allow(dead_code)]
     pub mac: Option<String>,
+    #[allow(dead_code)]
     pub hostname: Option<String>,
+    #[allow(dead_code)]
     pub ports: Vec<u16>,
+    #[allow(dead_code)]
     pub is_alive: bool,
 }
 
@@ -20,6 +24,7 @@ pub struct DiscoveredHost {
 pub struct ScanOptions {
     pub timeout_ms: u64,
     pub concurrent: usize,
+    #[allow(dead_code)]
     pub ping_first: bool,
 }
 

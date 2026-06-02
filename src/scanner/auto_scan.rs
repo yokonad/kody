@@ -1,6 +1,6 @@
-use crate::ai::{ScanResult, ServiceInfo, Vulnerability, Severity};
-use crate::scanner::{ScanConfig, parse_port_range, get_service_name, match_rules};
-use crate::network::{self, DiscoveredHost, ScanOptions};
+use crate::ai::ScanResult;
+use crate::scanner::{ScanConfig, parse_port_range};
+use crate::network::{self, ScanOptions};
 use std::time::Instant;
 
 pub struct AutoScanner;
@@ -98,17 +98,21 @@ async fn scan_host(target: &str, config: &ScanConfig) -> ScanResult {
 }
 
 /// Scan multiple hosts concurrently with rate limiting
+#[allow(dead_code)]
 pub async fn scan_multiple_hosts(targets: Vec<String>, ports: &[u16], concurrency: usize) -> Vec<ScanResult> {
     use tokio::sync::Semaphore;
+    use std::sync::Arc;
 
-    let semaphore = Semaphore::new(concurrency);
+    let semaphore = Arc::new(Semaphore::new(concurrency));
+    let ports = ports.to_vec();
     let mut handles = Vec::new();
 
     for target in targets {
-        let permit = semaphore.acquire().await.unwrap();
-        let ports = ports.to_vec();
+        let sem = semaphore.clone();
+        let ports = ports.clone();
 
         let handle = tokio::spawn(async move {
+            let _permit = sem.acquire().await.unwrap();
             let config = ScanConfig {
                 target: target.clone(),
                 ports: ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(","),
@@ -116,9 +120,7 @@ pub async fn scan_multiple_hosts(targets: Vec<String>, ports: &[u16], concurrenc
                 concurrent: 50,
             };
 
-            let result = crate::scanner::Scanner::run(&target, ports, &config).await;
-            drop(permit);
-            result
+            crate::scanner::Scanner::run(&target, ports, &config).await
         });
         handles.push(handle);
     }
@@ -138,6 +140,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore] // Requires network access and can take over 60 seconds
     async fn test_scan_network_returns_results() {
         let config = ScanConfig {
             target: "auto".to_string(),

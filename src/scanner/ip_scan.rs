@@ -1,9 +1,11 @@
-use crate::scanner::{ScanResult, ServiceInfo, Vulnerability, Severity, ScanConfig, parse_port_range};
+use crate::scanner::{ScanResult, ScanConfig, parse_port_range};
 
+#[allow(dead_code)]
 pub struct IpScanner;
 
 impl IpScanner {
     /// Scan a specific IP or domain for vulnerabilities
+    #[allow(dead_code)]
     pub async fn scan(target: &str, ports: &str, config: &ScanConfig) -> ScanResult {
         let port_list = parse_port_range(ports);
 

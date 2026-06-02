@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::net::ToSocketAddrs;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
@@ -27,9 +27,7 @@ pub fn parse_port_range(ports: &str) -> Vec<u16> {
             }
         } else {
             if let Ok(port) = part.parse::<u16>() {
-                if port <= 65535 {
-                    result.push(port);
-                }
+                result.push(port);
             }
         }
     }
@@ -57,17 +55,18 @@ pub async fn tcp_scan(
     timeout_ms: u64,
 ) -> Vec<u16> {
     use tokio::sync::Semaphore;
+    use std::sync::Arc;
 
-    let semaphore = Semaphore::new(concurrency);
+    let semaphore = Arc::new(Semaphore::new(concurrency));
     let mut handles = Vec::new();
 
     for port in ports {
         let target = target.to_string();
-        let permit = semaphore.acquire().await.unwrap();
+        let sem = semaphore.clone();
 
         let handle = tokio::spawn(async move {
+            let _permit = sem.acquire().await.unwrap();
             let result = tcp_connect(&target, port, timeout_ms).await;
-            drop(permit);
             if result {
                 Some(port)
             } else {
@@ -90,8 +89,6 @@ pub async fn tcp_scan(
 
 /// Resolve hostname to IP address
 pub async fn resolve_host(host: &str) -> Option<String> {
-    use std::net::ToSocketAddrs;
-
     // Check if it's already an IP address
     if host.parse::<std::net::Ipv4Addr>().is_ok() {
         return Some(host.to_string());

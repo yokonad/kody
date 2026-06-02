@@ -24,6 +24,7 @@ impl std::fmt::Display for Severity {
 
 /// Color code for severity (ANSI escape sequence)
 impl Severity {
+    #[allow(dead_code)]
     pub fn color(&self) -> &'static str {
         match self {
             Severity::Critical => "\x1b[91m",  // Bright red
@@ -34,6 +35,7 @@ impl Severity {
         }
     }
 
+    #[allow(dead_code)]
     pub fn reset(&self) -> &'static str {
         "\x1b[0m"
     }
@@ -60,6 +62,7 @@ impl Vulnerability {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_service(mut self, service: &str) -> Self {
         self.service = Some(service.to_string());
         self

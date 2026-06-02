@@ -48,6 +48,7 @@ impl Database {
     }
 
     /// Check if database is properly initialized and readable
+    #[allow(dead_code)]
     pub fn health_check(&self) -> SqliteResult<bool> {
         let count: i64 = self.conn.query_row(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table'",
@@ -59,10 +60,9 @@ impl Database {
 }
 
 // Re-export submodules
-pub use tokens::{CachedToken, TokenManager};
-pub use methods::{CachedMethod, MethodCache};
-pub use vulns::{CachedVuln, VulnCache};
-pub use history::{ScanRecord, ScanHistory};
+pub use tokens::TokenManager;
+pub use vulns::VulnCache;
+pub use history::ScanHistory;
 
 #[cfg(test)]
 mod tests {
@@ -81,7 +81,7 @@ mod tests {
     #[test]
     fn test_database_new_fails_on_invalid_path() {
         // Use a path that should fail (read-only directory if exists, or non-existent parent)
-        let result = Database::new(Path::new("/nonexistent/path/to/db.sqlite"));
+        let _result = Database::new(Path::new("/nonexistent/path/to/db.sqlite"));
         // This might fail or succeed depending on permissions - just ensure it returns Result
         // The actual behavior depends on the system
     }

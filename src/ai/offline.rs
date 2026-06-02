@@ -1,6 +1,5 @@
 use async_trait::async_trait;
-use crate::ai::{AiProvider, AiError};
-use crate::scanner::{ScanResult, Vulnerability, Severity};
+use crate::ai::{AiProvider, AiError, ScanResult, Vulnerability, Severity};
 
 pub struct OfflineProvider;
 

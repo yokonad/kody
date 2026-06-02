@@ -13,8 +13,13 @@ pub mod network;
 pub use ascii::banner;
 pub use config::{Config, Settings};
 pub use ai::{AiProvider, ScanResult, Vulnerability, Severity, create_provider};
-pub use scanner::{IpScanner, AutoScanner, HiddenMapper, ScanConfig, parse_port_range};
-pub use db::{Database, CachedToken, CachedMethod, CachedVuln, ScanRecord};
+pub use scanner::{AutoScanner, HiddenMapper, ScanConfig, parse_port_range};
+pub use scanner::ip_scan::IpScanner;
+pub use db::Database;
+pub use db::tokens::CachedToken;
+pub use db::methods::CachedMethod;
+pub use db::vulns::CachedVuln;
+pub use db::history::ScanRecord;
 pub use network::{DiscoveredHost, ScanOptions, Subnet};
 
 /// Library version

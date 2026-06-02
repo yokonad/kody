@@ -4,6 +4,7 @@ use rusqlite::{Connection, Result as SqliteResult};
 
 /// A cached scan method with success score
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CachedMethod {
     pub id: i64,
     pub method_name: String,
@@ -16,16 +17,19 @@ pub struct CachedMethod {
 }
 
 /// Method cache manager
+#[allow(dead_code)]
 pub struct MethodCache<'a> {
     conn: &'a Connection,
 }
 
+#[allow(dead_code)]
 impl<'a> MethodCache<'a> {
     pub fn new(conn: &'a Connection) -> Self {
         Self { conn }
     }
 
     /// Cache a successful scan method
+    #[allow(dead_code)]
     pub fn cache_method(
         &self,
         name: &str,
@@ -34,8 +38,8 @@ impl<'a> MethodCache<'a> {
     ) -> SqliteResult<()> {
         // Check if method already exists
         let existing: Option<i64> = self.conn.query_row(
-            "SELECT id FROM method_cache WHERE method_name = ?1 AND (target_pattern = ?2 OR (target_pattern IS NULL AND ?2 IS NULL))",
-            [name, target_pattern.unwrap_or("")],
+            "SELECT id FROM method_cache WHERE method_name = ?1",
+            rusqlite::params![name],
             |row| row.get(0),
         ).ok();
 
@@ -47,14 +51,14 @@ impl<'a> MethodCache<'a> {
                     times_used = times_used + 1,
                     last_verified = CURRENT_TIMESTAMP
                 WHERE id = ?1",
-                [id],
+                rusqlite::params![id],
             )?;
         } else {
             // Insert new method
             self.conn.execute(
                 "INSERT INTO method_cache (method_name, target_pattern, port_range, success_score, times_used)
                 VALUES (?1, ?2, ?3, 0.8, 1)",
-                [name, target_pattern, port_range],
+                rusqlite::params![name, target_pattern.unwrap_or(""), port_range.unwrap_or("")],
             )?;
         }
 
@@ -63,25 +67,42 @@ impl<'a> MethodCache<'a> {
 
     /// Get cached methods that match a target pattern
     pub fn get_cached_methods(&self, target_pattern: Option<&str>) -> SqliteResult<Vec<CachedMethod>> {
-        let mut stmt = if let Some(pattern) = target_pattern {
-            self.conn.prepare(
+        let mut methods = Vec::new();
+
+        if let Some(pattern) = target_pattern {
+            let mut stmt = self.conn.prepare(
                 "SELECT id, method_name, target_pattern, port_range, success_score, times_used, last_verified, created_at
                 FROM method_cache
                 WHERE target_pattern LIKE ?1 OR target_pattern IS NULL
                 ORDER BY success_score DESC, times_used DESC
                 LIMIT 20",
-            )?
+            )?;
+
+            let rows = stmt.query_map([pattern], |row| {
+                Ok(CachedMethod {
+                    id: row.get(0)?,
+                    method_name: row.get(1)?,
+                    target_pattern: row.get(2)?,
+                    port_range: row.get(3)?,
+                    success_score: row.get(4)?,
+                    times_used: row.get(5)?,
+                    last_verified: row.get(6)?,
+                    created_at: row.get(7)?,
+                })
+            })?;
+
+            for method in rows {
+                methods.push(method?);
+            }
         } else {
-            self.conn.prepare(
+            let mut stmt = self.conn.prepare(
                 "SELECT id, method_name, target_pattern, port_range, success_score, times_used, last_verified, created_at
                 FROM method_cache
                 ORDER BY success_score DESC, times_used DESC
                 LIMIT 20",
-            )?
-        };
+            )?;
 
-        let methods = if let Some(pattern) = target_pattern {
-            stmt.query_map([pattern], |row| {
+            let rows = stmt.query_map([], |row| {
                 Ok(CachedMethod {
                     id: row.get(0)?,
                     method_name: row.get(1)?,
@@ -92,23 +113,14 @@ impl<'a> MethodCache<'a> {
                     last_verified: row.get(6)?,
                     created_at: row.get(7)?,
                 })
-            })?
-        } else {
-            stmt.query_map([], |row| {
-                Ok(CachedMethod {
-                    id: row.get(0)?,
-                    method_name: row.get(1)?,
-                    target_pattern: row.get(2)?,
-                    port_range: row.get(3)?,
-                    success_score: row.get(4)?,
-                    times_used: row.get(5)?,
-                    last_verified: row.get(6)?,
-                    created_at: row.get(7)?,
-                })
-            })?
-        };
+            })?;
 
-        methods.collect()
+            for method in rows {
+                methods.push(method?);
+            }
+        }
+
+        Ok(methods)
     }
 
     /// Get all cached methods
@@ -136,17 +148,19 @@ impl<'a> MethodCache<'a> {
     }
 
     /// Update success score for a method
+    #[allow(dead_code)]
     pub fn update_success_score(&self, id: i64, score_delta: f64) -> SqliteResult<()> {
         self.conn.execute(
             "UPDATE method_cache SET success_score = success_score + ?1, last_verified = CURRENT_TIMESTAMP WHERE id = ?2",
-            [score_delta, id],
+            rusqlite::params![score_delta, id],
         )?;
         Ok(())
     }
 
     /// Delete a method by ID
+    #[allow(dead_code)]
     pub fn delete_method(&self, id: i64) -> SqliteResult<()> {
-        self.conn.execute("DELETE FROM method_cache WHERE id = ?1", [id])?;
+        self.conn.execute("DELETE FROM method_cache WHERE id = ?1", rusqlite::params![id])?;
         Ok(())
     }
 }
@@ -154,11 +168,9 @@ impl<'a> MethodCache<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
 
     fn test_db() -> Connection {
-        let temp_file = NamedTempFile::new().unwrap();
-        let conn = Connection::open(temp_file.path()).unwrap();
+        let conn = Connection::open_in_memory().unwrap();
         crate::db::schema::create_tables(&conn).unwrap();
         conn
     }

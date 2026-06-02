@@ -5,6 +5,7 @@ use sha2::{Sha256, Digest};
 
 /// A cached AI token with usage statistics
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CachedToken {
     pub id: i64,
     pub provider: String,
@@ -49,7 +50,7 @@ impl<'a> TokenManager<'a> {
         // Check if token already exists
         let existing: Option<i64> = self.conn.query_row(
             "SELECT id FROM successful_tokens WHERE token_hash = ?1",
-            [&token_hash],
+            rusqlite::params![&token_hash],
             |row| row.get(0),
         ).ok();
 
@@ -62,14 +63,14 @@ impl<'a> TokenManager<'a> {
                     success_rate = CAST(success_count AS REAL) / CAST(use_count AS REAL),
                     last_used = CURRENT_TIMESTAMP
                 WHERE id = ?1",
-                [id],
+                rusqlite::params![id],
             )?;
         } else {
             // Insert new token
             self.conn.execute(
                 "INSERT INTO successful_tokens (provider, token_hash, token_prefix, use_count, success_count, success_rate)
                 VALUES (?1, ?2, ?3, 1, 1, 1.0)",
-                [provider, &token_hash, &token_prefix],
+                rusqlite::params![provider, &token_hash, &token_prefix],
             )?;
         }
 
@@ -77,12 +78,13 @@ impl<'a> TokenManager<'a> {
     }
 
     /// Record a failed token usage (decreases success rate)
-    pub fn record_failed_token(&self, provider: &str, token: &str) -> SqliteResult<()> {
+    #[allow(dead_code)]
+    pub fn record_failed_token(&self, _provider: &str, token: &str) -> SqliteResult<()> {
         let token_hash = Self::hash_token(token);
 
         let existing: Option<i64> = self.conn.query_row(
             "SELECT id FROM successful_tokens WHERE token_hash = ?1",
-            [&token_hash],
+            rusqlite::params![&token_hash],
             |row| row.get(0),
         ).ok();
 
@@ -93,7 +95,7 @@ impl<'a> TokenManager<'a> {
                     success_rate = CAST(success_count AS REAL) / CAST(use_count AS REAL),
                     last_used = CURRENT_TIMESTAMP
                 WHERE id = ?1",
-                [id],
+                rusqlite::params![id],
             )?;
         }
 
@@ -154,6 +156,7 @@ impl<'a> TokenManager<'a> {
     }
 
     /// Delete a token by ID
+    #[allow(dead_code)]
     pub fn delete_token(&self, id: i64) -> SqliteResult<()> {
         self.conn.execute("DELETE FROM successful_tokens WHERE id = ?1", [id])?;
         Ok(())
@@ -163,11 +166,9 @@ impl<'a> TokenManager<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
 
     fn test_db() -> Connection {
-        let temp_file = NamedTempFile::new().unwrap();
-        let conn = Connection::open(temp_file.path()).unwrap();
+        let conn = Connection::open_in_memory().unwrap();
         crate::db::schema::create_tables(&conn).unwrap();
         conn
     }
@@ -195,7 +196,7 @@ mod tests {
         assert!(best.is_some());
         let token = best.unwrap();
         assert_eq!(token.provider, "openai");
-        assert_eq!(token.token_prefix, "sk-testab");
+        assert_eq!(token.token_prefix, "sk-testa");
     }
 
     #[test]

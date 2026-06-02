@@ -6,9 +6,11 @@ use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 use tokio::sync::Semaphore;
+use crate::network::ScanOptions;
 
 /// Represents a network interface
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct NetworkInterface {
     pub name: String,
     pub ip: String,
@@ -74,6 +76,7 @@ pub async fn get_local_subnet() -> Option<Subnet> {
 }
 
 /// List all network interfaces (simplified - returns local interface info)
+#[allow(dead_code)]
 pub async fn list_interfaces() -> Vec<NetworkInterface> {
     let mut interfaces = Vec::new();
 
@@ -106,17 +109,19 @@ pub async fn list_interfaces() -> Vec<NetworkInterface> {
 
 /// Discover alive hosts in a subnet using TCP connection probing
 pub async fn discover_hosts(subnet: &Subnet, options: &ScanOptions) -> Vec<super::DiscoveredHost> {
+    use std::sync::Arc;
+
     let ips = subnet.iter_ips();
-    let semaphore = Semaphore::new(options.concurrent);
+    let semaphore = Arc::new(Semaphore::new(options.concurrent));
+    let timeout_ms = options.timeout_ms;
     let mut handles = Vec::new();
 
     for ip in ips {
-        let permit = semaphore.acquire().await.unwrap();
-        let timeout_ms = options.timeout_ms;
+        let sem = semaphore.clone();
 
         let handle = tokio::spawn(async move {
+            let _permit = sem.acquire().await.unwrap();
             let is_alive = check_host_alive(&ip, timeout_ms).await;
-            drop(permit);
 
             if is_alive {
                 Some(super::DiscoveredHost {
@@ -160,6 +165,7 @@ async fn check_host_alive(ip: &Ipv4Addr, timeout_ms: u64) -> bool {
 }
 
 /// Resolve a hostname to IP address
+#[allow(dead_code)]
 pub async fn resolve_hostname(hostname: &str) -> Option<String> {
     let addr_str = format!("{}:0", hostname);
     if let Ok(mut addrs) = addr_str.to_socket_addrs() {

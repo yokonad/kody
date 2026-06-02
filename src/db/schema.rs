@@ -83,4 +83,5 @@ pub fn create_tables(conn: &Connection) -> SqliteResult<()> {
 }
 
 /// Current schema version
+#[allow(dead_code)]
 pub const CURRENT_VERSION: i32 = 1;

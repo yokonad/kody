@@ -4,6 +4,7 @@ use rusqlite::{Connection, Result as SqliteResult};
 
 /// A scan record from history
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ScanRecord {
     pub id: i64,
     pub target: String,
@@ -38,12 +39,13 @@ impl<'a> ScanHistory<'a> {
         self.conn.execute(
             "INSERT INTO scan_history (target, scan_type, ports_scanned, vulnerabilities_found, ai_used, duration_ms)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            [target, scan_type, ports_scanned, vulnerabilities_found, if ai_used { 1 } else { 0 }, duration_ms],
+            rusqlite::params![target, scan_type, ports_scanned, vulnerabilities_found, ai_used, duration_ms],
         )?;
         Ok(())
     }
 
     /// Get recent scans with limit
+    #[allow(dead_code)]
     pub fn get_recent_scans(&self, limit: u32) -> SqliteResult<Vec<ScanRecord>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, target, scan_type, ports_scanned, vulnerabilities_found, ai_used, duration_ms, timestamp
@@ -69,6 +71,7 @@ impl<'a> ScanHistory<'a> {
     }
 
     /// Get scans by target
+    #[allow(dead_code)]
     pub fn get_scans_by_target(&self, target: &str) -> SqliteResult<Vec<ScanRecord>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, target, scan_type, ports_scanned, vulnerabilities_found, ai_used, duration_ms, timestamp
@@ -77,7 +80,7 @@ impl<'a> ScanHistory<'a> {
             ORDER BY timestamp DESC",
         )?;
 
-        let records = stmt.query_map([target], |row| {
+        let records = stmt.query_map(rusqlite::params![target], |row| {
             Ok(ScanRecord {
                 id: row.get(0)?,
                 target: row.get(1)?,
@@ -94,6 +97,7 @@ impl<'a> ScanHistory<'a> {
     }
 
     /// Get total scan count
+    #[allow(dead_code)]
     pub fn count(&self) -> SqliteResult<i64> {
         self.conn.query_row(
             "SELECT COUNT(*) FROM scan_history",
@@ -103,6 +107,7 @@ impl<'a> ScanHistory<'a> {
     }
 
     /// Delete old scans (keep last N)
+    #[allow(dead_code)]
     pub fn prune_old_scans(&self, keep_last: u32) -> SqliteResult<usize> {
         let deleted = self.conn.execute(
             "DELETE FROM scan_history WHERE id NOT IN (
@@ -117,11 +122,9 @@ impl<'a> ScanHistory<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
 
     fn test_db() -> Connection {
-        let temp_file = NamedTempFile::new().unwrap();
-        let conn = Connection::open(temp_file.path()).unwrap();
+        let conn = Connection::open_in_memory().unwrap();
         crate::db::schema::create_tables(&conn).unwrap();
         conn
     }

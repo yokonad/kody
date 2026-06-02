@@ -64,13 +64,16 @@ impl Settings {
     }
 }
 
+#[allow(dead_code)]
 pub struct Config;
 
 impl Config {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self
     }
 
+    #[allow(dead_code)]
     pub fn ai_enabled(&self) -> bool {
         std::env::var("KODY_AI_KEY").is_ok()
             || Settings::load()
@@ -80,6 +83,7 @@ impl Config {
 }
 
 // For backward compatibility
+#[allow(dead_code)]
 pub type ConfigType = Config;
 
 #[cfg(test)]
