@@ -17,6 +17,19 @@ function Test-Command($cmd) {
     return $null -ne $null
 }
 
+function Test-RustInstalled {
+    # Verificar rustc y cargo en varias ubicaciones
+    $paths = @(
+        "$env:USERPROFILE\.cargo\bin\rustc.exe",
+        "$env:LOCALAPPDATA\Rustup\bin\rustc.exe",
+        "$env:ProgramFiles\Rustup\bin\rustc.exe"
+    )
+    foreach ($p in $paths) {
+        if (Test-Path $p) { return $true }
+    }
+    return (Test-Command rustc)
+}
+
 function Pause-Script {
     Write-Host ""
     Write-Host "Presiona ENTER para salir..." -ForegroundColor Gray
@@ -26,11 +39,12 @@ function Pause-Script {
 # PASO 1: Rust
 Write-Host "[PASO 1] Verificando Rust..." -ForegroundColor Magenta
 
-if (Test-Command rustc) {
+if (Test-RustInstalled) {
     $rustVersion = (rustc --version) -replace "rustc ", ""
     Write-Host "[OK] Rust instalado: $rustVersion" -ForegroundColor Green
 } else {
-    Write-Host "[INFO] Rust no encontrado. Descargando rustup..." -ForegroundColor Cyan
+    Write-Host "[INFO] Rust no encontrado. Instalando..." -ForegroundColor Cyan
+    Write-Host "[INFO]Descargando rustup..."
 
     $rustupUrl = "https://win.rustup.rs"
     $rustupPath = "$env:TEMP\rustup-init.exe"
@@ -38,53 +52,37 @@ if (Test-Command rustc) {
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         Invoke-WebRequest -Uri $rustupUrl -OutFile $rustupPath -UseBasicParsing
-        Write-Host "[OK] rustup-init.exe descargado" -ForegroundColor Green
     } catch {
-        Write-Host "[ERROR] No se pudo descargar rustup." -ForegroundColor Red
-        Write-Host "[INFO] Descarga manualmente desde https://rustup.rs" -ForegroundColor Cyan
+        Write-Host "[ERROR] No se pudo descargar." -ForegroundColor Red
         Pause-Script
         return
     }
 
-    Write-Host "[INFO] Instalando Rust (usa opcion 1 para instalacion default)..." -ForegroundColor Cyan
-    Write-Host "[INFO] El instalador se abrira en una ventana separada." -ForegroundColor Yellow
-    Write-Host ""
+    Write-Host "[INFO] Instalando Rust automaticamente..."
 
-    # Ejecutar rustup con las opciones correctas
+    # Instalar rustup sin ventanas, modo silencioso
     # -y = yes to all
-    # --default-toolchain stable = install stable as default
-    # --profile minimal = minimal install
-    $pinfo = New-Object System.Diagnostics.ProcessStartInfo
-    $pinfo.FileName = $rustupPath
-    $pinfo.Arguments = "-y --default-toolchain stable --profile minimal"
-    $pinfo.UseShellExecute = $true
-    $pinfo.WindowStyle = "Normal"
-    $p = New-Object System.Diagnostics.Process
-    $p.StartInfo = $pinfo
-    $p.Start() | Out-Null
-    $p.WaitForExit()
+    # --default-toolchain stable = instalar toolchain estable
+    # --profile minimal = instalacion minima sin extras
+    $env:RUSTUP_HOME = "$env:USERPROFILE\.rustup"
+    $env:CARGO_HOME = "$env:USERPROFILE\.cargo"
+    $env:Path = "$env:CARGO_HOME\bin;$env:Path"
 
-    $exitCode = $p.ExitCode
-    Write-Host "[INFO] rustup finalizo con codigo: $exitCode" -ForegroundColor Cyan
+    & $rustupPath -y --default-toolchain stable --profile minimal --no-modify-path 2>&1 | Out-Null
 
-    # Esperar un poco mas para que se complete la instalacion
-    Start-Sleep -Seconds 10
+    # Esperar instalacion
+    Start-Sleep -Seconds 15
 
-    # Refrescar PATH
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+    # Refrescar variables de entorno
+    $env:Path = "$env:CARGO_HOME\bin;" + [System.Environment]::GetEnvironmentVariable("Path", "User") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "Machine")
 
-    # Verificar
-    Start-Sleep -Seconds 3
-
-    if (Test-Command rustc) {
+    # Verificar final
+    if (Test-RustInstalled) {
         $rustVersion = (rustc --version) -replace "rustc ", ""
         Write-Host "[OK] Rust instalado: $rustVersion" -ForegroundColor Green
     } else {
-        Write-Host "[ERROR] Rust no se instalo correctamente." -ForegroundColor Red
-        Write-Host "[INFO] Posibles soluciones:" -ForegroundColor Cyan
-        Write-Host "  1. Ve a https://rustup.rs y descarga rustup-init.exe" -ForegroundColor White
-        Write-Host "  2. Ejecútalo manualmente y elige opcion 1" -ForegroundColor White
-        Write-Host "  3. Reinicia PowerShell y ejecuta este script de nuevo" -ForegroundColor White
+        Write-Host "[ERROR] Rust no se instalo." -ForegroundColor Red
+        Write-Host "[INFO] Instala manualmente desde: https://rustup.rs" -ForegroundColor Cyan
         Pause-Script
         return
     }
@@ -98,13 +96,11 @@ $KodyDir = "$HOME\kody"
 $ProjectDir = "$KodyDir\kody"
 
 if (Test-Path "$ProjectDir\.git") {
-    Write-Host "[INFO] Repositorio existe. Actualizando..." -ForegroundColor Cyan
+    Write-Host "[INFO] Actualizando repositorio..." -ForegroundColor Cyan
     Set-Location $ProjectDir
     git pull origin main 2>$null
 } else {
-    if (Test-Path $KodyDir) {
-        Remove-Item -Recurse -Force $KodyDir
-    }
+    if (Test-Path $KodyDir) { Remove-Item -Recurse -Force $KodyDir }
     Write-Host "[INFO] Clonando repositorio..." -ForegroundColor Cyan
     git clone https://github.com/yokonad/kody.git $KodyDir 2>$null
 }
@@ -113,7 +109,7 @@ if (Test-Path $ProjectDir) {
     Set-Location $ProjectDir
     Write-Host "[OK] Repositorio listo" -ForegroundColor Green
 } else {
-    Write-Host "[ERROR] Error al descargar repositorio." -ForegroundColor Red
+    Write-Host "[ERROR] Error al descargar." -ForegroundColor Red
     Pause-Script
     return
 }
@@ -124,18 +120,21 @@ Write-Host ""
 Write-Host "[PASO 3] Compilando Kody..." -ForegroundColor Magenta
 Write-Host "[INFO] Esto puede tomar 5-15 minutos..." -ForegroundColor Cyan
 
-$env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+# Asegurar que cargo este en PATH
+$env:CARGO_HOME = "$env:USERPROFILE\.cargo"
+$env:RUSTUP_HOME = "$env:USERPROFILE\.rustup"
+$env:Path = "$env:CARGO_HOME\bin;" + [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
 if (-not (Test-Command cargo)) {
     Write-Host "[ERROR] Cargo no disponible." -ForegroundColor Red
-    Write-Host "[INFO] Ejecuta en una nueva terminal: rustup default stable" -ForegroundColor White
+    Write-Host "[INFO] Ejecuta en nueva terminal: rustup default stable" -ForegroundColor White
     Pause-Script
     return
 }
 
 try {
     Set-Location $ProjectDir
-    Write-Host "[INFO] Compilando (puede tardar varios minutos)..." -ForegroundColor Cyan
+    Write-Host "[INFO] Compilando..." -ForegroundColor Cyan
     cargo build --release 2>$null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERROR] Compilacion fallo." -ForegroundColor Red
@@ -183,8 +182,6 @@ Write-Host "+============================================================+" -For
 Write-Host ""
 Write-Host "Abre una NUEVA terminal PowerShell y ejecuta:" -ForegroundColor Cyan
 Write-Host "  kody --help" -ForegroundColor White
-Write-Host ""
-Write-Host "Si no funciona, ejecuta: refreshenv" -ForegroundColor Yellow
 Write-Host ""
 
 Pause-Script

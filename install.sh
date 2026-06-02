@@ -12,158 +12,153 @@ set -e
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
 MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 WHITE='\033[1;37m'
 RESET='\033[0m'
 
 # Banner
-show_banner() {
-    echo -e "${CYAN}"
-    echo "+============================================================+"
-    echo "|                       KODY                               |"
-    echo "|              Scanner de Vulnerabilidades CLI              |"
-    echo "+============================================================+"
-    echo -e "${RESET}"
-}
+echo -e "${CYAN}"
+echo "+============================================================+"
+echo "|                       KODY                               |"
+echo "|              Scanner de Vulnerabilidades CLI              |"
+echo "+============================================================+"
+echo -e "${RESET}"
 
-# Función para pausar
-pause() {
-    echo ""
-    read -p "Presiona Enter para continuar..."
-}
+echo -e "${CYAN}[INFO] Iniciando instalacion de Kody...${RESET}"
+echo ""
 
-# Verificar si el comando existe
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-# =============================================================================
-# PASO 1: Instalar Rust
-# =============================================================================
-echo -e "[${MAGENTA}PASO 1${RESET}] Verificando Rust..."
-
-if command_exists rustc && command_exists cargo; then
-    RUST_VERSION=$(rustc --version | cut -d' ' -f2)
-    echo -e "[${GREEN}OK${RESET}] Rust ya esta instalado: $RUST_VERSION"
-else
-    echo -e "[${YELLOW}INFO${RESET}] Rust no encontrado. Iniciando instalacion..."
-
-    # Detectar SO
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS - verificar si brew esta instalado
-        if command_exists brew; then
-            echo -e "[${YELLOW}INFO${RESET}] Instalando Rust via Homebrew..."
-            brew install rustup-init
-            rustup-init
-        else
-            echo -e "[${YELLOW}INFO${RESET}] Instalando Rust via rustup..."
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        fi
-    else
-        # Linux
-        echo -e "[${YELLOW}INFO${RESET}] Instalando Rust via rustup..."
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+# Verificar si Rust esta instalado (en varias ubicaciones posibles)
+test_rust_installed() {
+    if command -v rustc >/dev/null 2>&1; then
+        return 0
     fi
+    if [ -f "$HOME/.cargo/bin/rustc" ]; then
+        return 0
+    fi
+    if [ -f "$HOME/.rustup/toolchains/stable/x86_64-unknown-linux-gnu/bin/rustc" ]; then
+        return 0
+    fi
+    return 1
+}
 
-    # Cargar entorno de Rust
+# Cargar entorno de Rust si existe
+load_rust_env() {
     if [ -f "$HOME/.cargo/env" ]; then
         source "$HOME/.cargo/env"
     fi
+}
 
-    # Esperar y verificar
-    sleep 2
-    if command_exists rustc && command_exists cargo; then
-        RUST_VERSION=$(rustc --version | cut -d' ' -f2)
-        echo -e "[${GREEN}OK${RESET}] Rust instalado correctamente: $RUST_VERSION"
+# PASO 1: Rust
+echo -e "${MAGENTA}[PASO 1] Verificando Rust...${RESET}"
+
+load_rust_env
+
+if test_rust_installed; then
+    RUST_VERSION=$(rustc --version 2>/dev/null | cut -d' ' -f2 || echo "desconocida")
+    echo -e "${GREEN}[OK] Rust instalado: $RUST_VERSION${RESET}"
+else
+    echo -e "${CYAN}[INFO] Rust no encontrado. Instalando...${RESET}"
+
+    # Detectar SO y instalar
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS
+        if command -v brew >/dev/null 2>&1; then
+            echo -e "${CYAN}[INFO] Instalando via Homebrew...${RESET}"
+            brew install rustup-init
+            rustup-init -y --default-toolchain stable --profile minimal
+        else
+            echo -e "${CYAN}[INFO] Instalando Rust via rustup...${RESET}"
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+        fi
     else
-        echo -e "[${RED}ERROR${RESET}] Rust no se pudo instalar."
-        echo -e "[${CYAN}INFO${RESET}] Por favor, instala Rust manualmente desde: https://rustup.rs"
-        pause
+        # Linux
+        echo -e "${CYAN}[INFO] Instalando Rust via rustup...${RESET}"
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+    fi
+
+    # Cargar entorno
+    load_rust_env
+
+    # Esperar instalacion
+    sleep 5
+
+    # Verificar
+    if test_rust_installed; then
+        RUST_VERSION=$(rustc --version | cut -d' ' -f2)
+        echo -e "${GREEN}[OK] Rust instalado: $RUST_VERSION${RESET}"
+    else
+        echo -e "${RED}[ERROR] Rust no se instalo correctamente.${RESET}"
+        echo -e "${CYAN}[INFO] Instala Rust manualmente desde: https://rustup.rs${RESET}"
         exit 1
     fi
 fi
 
 echo ""
 
-# =============================================================================
-# PASO 2: Clonar repositorio
-# =============================================================================
-echo -e "[${MAGENTA}PASO 2${RESET}] Descargando Kody..."
+# PASO 2: Repo
+echo -e "${MAGENTA}[PASO 2] Descargando Kody...${RESET}"
 
 KODY_DIR="$HOME/kody"
 PROJECT_DIR="$KODY_DIR/kody"
 
 if [ -d "$PROJECT_DIR/.git" ]; then
-    echo -e "[${YELLOW}INFO${RESET}] El repositorio ya existe. Actualizando..."
+    echo -e "${CYAN}[INFO] Actualizando repositorio...${RESET}"
     cd "$PROJECT_DIR"
     git pull origin main 2>/dev/null || git pull origin master 2>/dev/null || true
 else
     if [ -d "$KODY_DIR" ]; then
-        echo -e "[${YELLOW}INFO${RESET}] Eliminando directorio anterior..."
         rm -rf "$KODY_DIR"
     fi
-
-    echo -e "[${YELLOW}INFO${RESET}] Clonando repositorio..."
+    echo -e "${CYAN}[INFO] Clonando repositorio...${RESET}"
     git clone https://github.com/yokonad/kody.git "$KODY_DIR"
     cd "$PROJECT_DIR"
 fi
 
-echo -e "[${GREEN}OK${RESET}] Repositorio listo"
-echo ""
-
-# =============================================================================
-# PASO 3: Compilar proyecto
-# =============================================================================
-echo -e "[${MAGENTA}PASO 3${RESET}] Compilando Kody..."
-echo -e "[${YELLOW}INFO${RESET}] Este proceso puede tomar de 5 a 15 minutos..."
-echo -e "[${YELLOW}INFO${RESET}] En la primera compilacion se descargan todas las dependencias."
-echo ""
-
-# Cargar entorno de Rust si es necesario
-if [ -f "$HOME/.cargo/env" ]; then
-    source "$HOME/.cargo/env"
-fi
-
-# Verificar que cargo esté disponible
-if ! command_exists cargo; then
-    echo -e "[${RED}ERROR${RESET}] Cargo no esta disponible en el PATH."
-    echo -e "[${CYAN}INFO${RESET}] Ejecuta: source ~/.cargo/env"
-    echo -e "[${CYAN}INFO${RESET}] O reinicia tu terminal."
-    pause
+if [ -d "$PROJECT_DIR" ]; then
+    echo -e "${GREEN}[OK] Repositorio listo${RESET}"
+else
+    echo -e "${RED}[ERROR] Error al descargar repositorio.${RESET}"
     exit 1
 fi
 
-# Compilar
-cargo build --release 2>&1 | tail -10
+echo ""
+
+# PASO 3: Compilar
+echo -e "${MAGENTA}[PASO 3] Compilando Kody...${RESET}"
+echo -e "${CYAN}[INFO] Esto puede tomar 5-15 minutos...${RESET}"
+
+load_rust_env
+
+if ! command -v cargo >/dev/null 2>&1; then
+    echo -e "${RED}[ERROR] Cargo no disponible.${RESET}"
+    echo -e "${CYAN}[INFO] Ejecuta: source ~/.cargo/env${RESET}"
+    exit 1
+fi
+
+echo -e "${CYAN}[INFO] Compilando...${RESET}"
+cargo build --release 2>&1 | tail -5
 
 if [ -f "target/release/kody" ]; then
-    echo ""
-    echo -e "[${GREEN}OK${RESET}] Compilacion exitosa!"
+    echo -e "${GREEN}[OK] Compilacion exitosa!${RESET}"
 else
-    echo -e "[${RED}ERROR${RESET}] El archivo kody no se encontro despues de la compilacion."
-    pause
+    echo -e "${RED}[ERROR] Compilacion fallo.${RESET}"
     exit 1
 fi
 
 echo ""
 
-# =============================================================================
-# PASO 4: Instalar binario
-# =============================================================================
-echo -e "[${MAGENTA}PASO 4${RESET}] Instalando Kody..."
+# PASO 4: Instalar
+echo -e "${MAGENTA}[PASO 4] Instalando...${RESET}"
 
 BIN_DIR="$HOME/.local/bin"
 BIN_PATH="$BIN_DIR/kody"
 
-# Crear directorio si no existe
 mkdir -p "$BIN_DIR"
 
-# Copiar binario
 cp "target/release/kody" "$BIN_PATH"
 chmod +x "$BIN_PATH"
-echo -e "[${GREEN}OK${RESET}] Kody instalado en: $BIN_PATH"
+echo -e "${GREEN}[OK] Kody instalado en: $BIN_PATH${RESET}"
 
 # Agregar al PATH si es necesario
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
@@ -177,26 +172,14 @@ if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
         echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$SHELL_RC"
     fi
     export PATH="$BIN_DIR:$PATH"
-    echo -e "[${GREEN}OK${RESET}] $BIN_DIR agregado al PATH"
+    echo -e "${GREEN}[OK] PATH actualizado${RESET}"
 fi
 
 echo ""
-
-# =============================================================================
-# FINAL
-# =============================================================================
 echo -e "${GREEN}+============================================================+${RESET}"
 echo -e "${GREEN}|         INSTALACION COMPLETADA EXITOSAMENTE!              |${RESET}"
 echo -e "${GREEN}+============================================================+${RESET}"
 echo ""
-echo -e "Para usar Kody, cierra esta ventana y abre una Nueva terminal."
-echo -e "Luego ejecuta:"
-echo -e "  ${CYAN}kody --help${RESET}"
-echo ""
-echo -e "O desde el directorio:"
-echo -e "  ${CYAN}$PROJECT_DIR/target/release/kody --help${RESET}"
-echo ""
-echo -e "${YELLOW}Nota:${RESET} Si 'kody' no funciona, ejecuta:"
-echo -e "      ${CYAN}source ~/.bashrc${RESET}"
-echo -e "      o reinicia tu terminal."
+echo -e "${CYAN}Abre una NUEVA terminal y ejecuta:${RESET}"
+echo -e "  ${WHITE}kody --help${RESET}"
 echo ""
