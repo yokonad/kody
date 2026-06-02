@@ -6,8 +6,6 @@
 #   curl -fsSL https://raw.githubusercontent.com/yokonad/kody/main/install.sh | bash
 # =============================================================================
 
-set -e
-
 # Colores
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -17,18 +15,12 @@ CYAN='\033[0;36m'
 WHITE='\033[1;37m'
 RESET='\033[0m'
 
-# Banner
-echo -e "${CYAN}"
-echo "+============================================================+"
-echo "|                       KODY                               |"
-echo "|              Scanner de Vulnerabilidades CLI              |"
-echo "+============================================================+"
-echo -e "${RESET}"
-
-echo -e "${CYAN}[INFO] Iniciando instalacion de Kody...${RESET}"
+echo ""
+echo "          KODY - Scanner de Vulnerabilidades CLI"
+echo "          =============================================="
 echo ""
 
-# Verificar si Rust esta instalado (en varias ubicaciones posibles)
+# Verificar si Rust esta instalado
 test_rust_installed() {
     if command -v rustc >/dev/null 2>&1; then
         return 0
@@ -42,7 +34,7 @@ test_rust_installed() {
     return 1
 }
 
-# Cargar entorno de Rust si existe
+# Cargar entorno de Rust
 load_rust_env() {
     if [ -f "$HOME/.cargo/env" ]; then
         source "$HOME/.cargo/env"
@@ -56,40 +48,30 @@ load_rust_env
 
 if test_rust_installed; then
     RUST_VERSION=$(rustc --version 2>/dev/null | cut -d' ' -f2 || echo "desconocida")
-    echo -e "${GREEN}[OK] Rust instalado: $RUST_VERSION${RESET}"
+    echo -e "  ${GREEN}[OK] Rust instalado: $RUST_VERSION${RESET}"
 else
-    echo -e "${CYAN}[INFO] Rust no encontrado. Instalando...${RESET}"
+    echo -e "  ${CYAN}[INFO] Rust no encontrado. Instalando...${RESET}"
 
-    # Detectar SO y instalar
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS
         if command -v brew >/dev/null 2>&1; then
-            echo -e "${CYAN}[INFO] Instalando via Homebrew...${RESET}"
             brew install rustup-init
             rustup-init -y --default-toolchain stable --profile minimal
         else
-            echo -e "${CYAN}[INFO] Instalando Rust via rustup...${RESET}"
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
         fi
     else
-        # Linux
-        echo -e "${CYAN}[INFO] Instalando Rust via rustup...${RESET}"
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
     fi
 
-    # Cargar entorno
     load_rust_env
-
-    # Esperar instalacion
     sleep 5
 
-    # Verificar
     if test_rust_installed; then
         RUST_VERSION=$(rustc --version | cut -d' ' -f2)
-        echo -e "${GREEN}[OK] Rust instalado: $RUST_VERSION${RESET}"
+        echo -e "  ${GREEN}[OK] Rust instalado: $RUST_VERSION${RESET}"
     else
-        echo -e "${RED}[ERROR] Rust no se instalo correctamente.${RESET}"
-        echo -e "${CYAN}[INFO] Instala Rust manualmente desde: https://rustup.rs${RESET}"
+        echo -e "  ${RED}[ERROR] Rust no se instalo correctamente.${RESET}"
+        echo -e "  ${CYAN}[INFO] Instala Rust manualmente desde: https://rustup.rs${RESET}"
         exit 1
     fi
 fi
@@ -103,22 +85,22 @@ KODY_DIR="$HOME/kody"
 PROJECT_DIR="$KODY_DIR/kody"
 
 if [ -d "$PROJECT_DIR/.git" ]; then
-    echo -e "${CYAN}[INFO] Actualizando repositorio...${RESET}"
+    echo -e "  ${CYAN}[INFO] Actualizando repositorio...${RESET}"
     cd "$PROJECT_DIR"
     git pull origin main 2>/dev/null || git pull origin master 2>/dev/null || true
 else
     if [ -d "$KODY_DIR" ]; then
         rm -rf "$KODY_DIR"
     fi
-    echo -e "${CYAN}[INFO] Clonando repositorio...${RESET}"
+    echo -e "  ${CYAN}[INFO] Clonando repositorio...${RESET}"
     git clone https://github.com/yokonad/kody.git "$KODY_DIR"
     cd "$PROJECT_DIR"
 fi
 
 if [ -d "$PROJECT_DIR" ]; then
-    echo -e "${GREEN}[OK] Repositorio listo${RESET}"
+    echo -e "  ${GREEN}[OK] Repositorio listo${RESET}"
 else
-    echo -e "${RED}[ERROR] Error al descargar repositorio.${RESET}"
+    echo -e "  ${RED}[ERROR] Error al descargar repositorio.${RESET}"
     exit 1
 fi
 
@@ -126,23 +108,23 @@ echo ""
 
 # PASO 3: Compilar
 echo -e "${MAGENTA}[PASO 3] Compilando Kody...${RESET}"
-echo -e "${CYAN}[INFO] Esto puede tomar 5-15 minutos...${RESET}"
+echo -e "  ${CYAN}[INFO] Esto puede tomar 5-15 minutos...${RESET}"
 
 load_rust_env
 
 if ! command -v cargo >/dev/null 2>&1; then
-    echo -e "${RED}[ERROR] Cargo no disponible.${RESET}"
-    echo -e "${CYAN}[INFO] Ejecuta: source ~/.cargo/env${RESET}"
+    echo -e "  ${RED}[ERROR] Cargo no disponible.${RESET}"
+    echo -e "  ${CYAN}[INFO] Ejecuta: source ~/.cargo/env${RESET}"
     exit 1
 fi
 
-echo -e "${CYAN}[INFO] Compilando...${RESET}"
+echo -e "  ${CYAN}[INFO] Compilando...${RESET}"
 cargo build --release 2>&1 | tail -5
 
 if [ -f "target/release/kody" ]; then
-    echo -e "${GREEN}[OK] Compilacion exitosa!${RESET}"
+    echo -e "  ${GREEN}[OK] Compilacion exitosa!${RESET}"
 else
-    echo -e "${RED}[ERROR] Compilacion fallo.${RESET}"
+    echo -e "  ${RED}[ERROR] Compilacion fallo.${RESET}"
     exit 1
 fi
 
@@ -158,9 +140,8 @@ mkdir -p "$BIN_DIR"
 
 cp "target/release/kody" "$BIN_PATH"
 chmod +x "$BIN_PATH"
-echo -e "${GREEN}[OK] Kody instalado en: $BIN_PATH${RESET}"
+echo -e "  ${GREEN}[OK] Kody instalado en: $BIN_PATH${RESET}"
 
-# Agregar al PATH si es necesario
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
     SHELL_RC="$HOME/.bashrc"
     [ -f "$HOME/.zshrc" ] && SHELL_RC="$HOME/.zshrc"
@@ -172,13 +153,13 @@ if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
         echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$SHELL_RC"
     fi
     export PATH="$BIN_DIR:$PATH"
-    echo -e "${GREEN}[OK] PATH actualizado${RESET}"
+    echo -e "  ${GREEN}[OK] PATH actualizado${RESET}"
 fi
 
 echo ""
-echo -e "${GREEN}+============================================================+${RESET}"
-echo -e "${GREEN}|         INSTALACION COMPLETADA EXITOSAMENTE!              |${RESET}"
-echo -e "${GREEN}+============================================================+${RESET}"
+echo "============================================================"
+echo "        INSTALACION COMPLETADA EXITOSAMENTE!" -ForegroundColor Green
+echo "============================================================"
 echo ""
 echo -e "${CYAN}Abre una NUEVA terminal y ejecuta:${RESET}"
 echo -e "  ${WHITE}kody --help${RESET}"
