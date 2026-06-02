@@ -7,8 +7,6 @@ Write-Host ""
 Write-Host "KODY - Scanner de Vulnerabilidades CLI" -ForegroundColor Cyan
 Write-Host ""
 
-$DebugMode = $true  # Cambiar a $false para produccion
-
 function Test-Command($cmd) {
     $null = Get-Command $cmd -ErrorAction SilentlyContinue
     return $null -ne $null
@@ -55,12 +53,6 @@ function Pause-Script {
     $null = Read-Host
 }
 
-function Write-Debug($msg) {
-    if ($DebugMode) {
-        Write-Host "  [DEBUG] $msg" -ForegroundColor DarkGray
-    }
-}
-
 # =============================================================================
 # PRE-INSTALACION
 # =============================================================================
@@ -75,6 +67,10 @@ if ($needsGit) {
 
 if ($needsRust) {
     Write-Host "  [INFO] Rust no encontrado. Se instalara." -ForegroundColor Cyan
+}
+
+if (-not $needsGit -and -not $needsRust) {
+    Write-Host "  [INFO] Git y Rust ya instalados." -ForegroundColor Cyan
 }
 
 Write-Host ""
@@ -177,85 +173,87 @@ Write-Host ""
 Write-Host "[PASO 3] Descargando Kody..." -ForegroundColor Magenta
 
 $KodyDir = "$HOME\kody"
-$ProjectDir = "$KodyDir\kody"
 
-Write-Debug "KodyDir: $KodyDir"
-Write-Debug "Git location: $((Get-Command git -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source))"
-Write-Debug "Git version: $(git --version)"
+Write-Host "  [INFO] Directorio destino: $KodyDir" -ForegroundColor Cyan
+Write-Host "  [INFO] Git: $((Get-Command git -ErrorAction SilentlyContinue).Source)" -ForegroundColor Cyan
+Write-Host "  [INFO] Git version: $(git --version)" -ForegroundColor Cyan
 
 # Limpiar instalacion anterior
 if (Test-Path $KodyDir) {
     Write-Host "  [INFO] Limpiando instalacion anterior..." -ForegroundColor Cyan
-    Write-Debug "Eliminando: $KodyDir"
     Remove-Item -Recurse -Force $KodyDir -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
+    Start-Sleep -Seconds 3
+
+    if (Test-Path $KodyDir) {
+        Write-Host "  [WARN] No se pudo eliminar. Reintentando..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 2
+        Remove-Item -Recurse -Force $KodyDir -ErrorAction SilentlyContinue
+    }
 
     if (Test-Path $KodyDir) {
         Write-Host "  [ERROR] No se pudo eliminar $KodyDir" -ForegroundColor Red
-        Write-Debug "Todavia existe dopo Remove-Item"
+        Write-Host "  [INFO] Cierra todos los programas que puedan usar esa carpeta." -ForegroundColor Cyan
+        Write-Host "  [INFO] Luego intenta de nuevo manualmente." -ForegroundColor Cyan
         Pause-Script
         return
     }
-    Write-Debug "Eliminacion exitosa"
+    Write-Host "  [OK] Limpiado correctamente" -ForegroundColor Green
 }
 
-Write-Host "  [INFO] Clonando repositorio..." -ForegroundColor Cyan
-Write-Debug "Comando: git clone --depth 1 https://github.com/yokonad/kody.git $KodyDir"
+Write-Host "  [INFO] Ejecutando: git clone --depth 1 https://github.com/yokonad/kody.git" -ForegroundColor Cyan
 
-# Clonar repositorio
-$gitExitCode = 0
+# Clonar repositorio - mostrar todo el output
 $gitOutput = ""
+$gitError = $null
 
 try {
-    # Ejecutar git clone
     $gitResult = & git clone --depth 1 https://github.com/yokonad/kody.git $KodyDir 2>&1
     $gitExitCode = $LASTEXITCODE
+
+    # Convertir output a string
     $gitOutput = $gitResult | Out-String
 
-    Write-Debug "Git exit code: $gitExitCode"
-    if ($gitOutput) {
-        Write-Debug "Git output:"
-        $gitOutput -split "`n" | Where-Object { $_.Trim() } | ForEach-Object {
-            Write-Debug "  $_"
+    Write-Host "  [DEBUG] Git exit code: $gitExitCode" -ForegroundColor DarkCyan
+
+    if ($gitOutput -and $gitOutput.Trim()) {
+        Write-Host "  [DEBUG] Git output:" -ForegroundColor DarkCyan
+        $gitOutput.Trim() -split "`n" | ForEach-Object {
+            Write-Host "    $_" -ForegroundColor DarkCyan
         }
     }
-} catch {
-    Write-Debug "Excepcion durante git clone: $_"
-    $gitExitCode = 1
-}
 
-if ($gitExitCode -ne 0) {
-    Write-Host "  [ERROR] Error al clonar repositorio (exit code: $gitExitCode)" -ForegroundColor Red
-    Write-Debug "No se pudo clonar el repositorio"
-    Write-Debug "Verifica tu conexion a internet"
-    Write-Debug "URL: https://github.com/yokonad/kody"
-    Pause-Script
-    return
-}
-
-# Verificar que se descargo - git clone crea el directorio directamente
-Write-Debug "Verificando descarga en: $KodyDir"
-
-if (Test-Path $KodyDir) {
-    $contents = Get-ChildItem $KodyDir -ErrorAction SilentlyContinue
-    Write-Debug "Contenido de $KodyDir : $($contents.Count) items"
-
-    if ($contents.Count -eq 0) {
-        Write-Host "  [ERROR] El repositorio esta vacio." -ForegroundColor Red
+    if ($gitExitCode -ne 0) {
+        Write-Host "  [ERROR] Git clone fallido (exit code: $gitExitCode)" -ForegroundColor Red
+        Write-Host "  [INFO] Posibles causas:" -ForegroundColor Yellow
+        Write-Host "    - Sin conexion a internet" -ForegroundColor White
+        Write-Host "    - Proxy o firewall bloqueando" -ForegroundColor White
+        Write-Host "    - URL incorrecta" -ForegroundColor White
         Pause-Script
         return
     }
 
-    # El repositorio clonado esta en $KodyDir directamente (no en subdirectorio)
-    Write-Debug "Repositorio clonado correctamente en $KodyDir"
-} else {
-    Write-Host "  [ERROR] El repositorio no se descargo." -ForegroundColor Red
-    Write-Debug "$KodyDir no existe despues de git clone"
+} catch {
+    Write-Host "  [ERROR] Excepcion al clonar: $_" -ForegroundColor Red
     Pause-Script
     return
 }
 
-Write-Host "  [OK] Repositorio listo" -ForegroundColor Green
+# Verificar descarga
+if (-not (Test-Path $KodyDir)) {
+    Write-Host "  [ERROR] El directorio $KodyDir no existe despues de git clone" -ForegroundColor Red
+    Write-Host "  [DEBUG] gitOutput fue: $gitOutput" -ForegroundColor DarkCyan
+    Pause-Script
+    return
+}
+
+$contents = Get-ChildItem $KodyDir -ErrorAction SilentlyContinue
+if ($null -eq $contents -or $contents.Count -eq 0) {
+    Write-Host "  [ERROR] El repositorio esta vacio" -ForegroundColor Red
+    Pause-Script
+    return
+}
+
+Write-Host "  [OK] Descargado! Archivos: $($contents.Count)" -ForegroundColor Green
 Write-Host ""
 
 # =============================================================================
@@ -270,23 +268,25 @@ $env:Path = "$env:CARGO_HOME\bin;" + [System.Environment]::GetEnvironmentVariabl
 
 if (-not (Test-Command cargo)) {
     Write-Host "  [ERROR] Cargo no disponible." -ForegroundColor Red
-    Write-Debug "cargo no encontrado en PATH"
     Pause-Script
     return
 }
 
-Write-Debug "Cargo disponible: $(cargo --version)"
-
 try {
     Set-Location $KodyDir
-    Write-Host "  [INFO] Compilando..." -ForegroundColor Cyan
-    Write-Debug "Working directory: $(Get-Location)"
+    Write-Host "  [INFO] Working dir: $(Get-Location)" -ForegroundColor Cyan
+    Write-Host "  [INFO] Ejecutando: cargo build --release" -ForegroundColor Cyan
 
-    cargo build --release 2>&1 | ForEach-Object { Write-Host "    $_" }
+    $cargoOutput = cargo build --release 2>&1 | Out-String
+    Write-Host "  [DEBUG] Cargo output:" -ForegroundColor DarkCyan
+    $cargoOutput -split "`n" | Select-Object -First 5 | ForEach-Object {
+        Write-Host "    $_" -ForegroundColor DarkCyan
+    }
 
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "  [ERROR] Compilacion fallo." -ForegroundColor Red
-        Write-Debug "cargo build retorno exit code: $LASTEXITCODE"
+        Write-Host "  [ERROR] Compilacion fallo (exit code: $LASTEXITCODE)" -ForegroundColor Red
+        Write-Host "  [DEBUG] Full cargo output:" -ForegroundColor DarkCyan
+        $cargoOutput -split "`n" | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkCyan }
         Pause-Script
         return
     }
@@ -296,12 +296,13 @@ try {
     return
 }
 
-if (Test-Path "$KodyDir\target\release\kody.exe") {
+$exePath = "$KodyDir\target\release\kody.exe"
+if (Test-Path $exePath) {
     Write-Host "  [OK] Compilacion exitosa!" -ForegroundColor Green
-    Write-Debug "Binario creado: $KodyDir\target\release\kody.exe"
+    $exeSize = (Get-Item $exePath).Length / 1MB
+    Write-Host "  [INFO] Tamano: $([math]::Round($exeSize, 2)) MB" -ForegroundColor Cyan
 } else {
-    Write-Host "  [ERROR] kody.exe no encontrado." -ForegroundColor Red
-    Write-Debug "No se encontro $KodyDir\target\release\kody.exe"
+    Write-Host "  [ERROR] kody.exe no encontrado en: $exePath" -ForegroundColor Red
     Pause-Script
     return
 }
@@ -319,7 +320,7 @@ if (-not (Test-Path $BinDir)) {
     New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
 }
 
-Copy-Item "$KodyDir\target\release\kody.exe" $BinPath -Force
+Copy-Item $exePath $BinPath -Force
 Write-Host "  [OK] Kody instalado en: $BinPath" -ForegroundColor Green
 
 $UserPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
