@@ -4,8 +4,7 @@
 $host.UI.RawUI.WindowTitle = "Kody - Instalacion"
 
 Write-Host ""
-Write-Host "          KODY - Scanner de Vulnerabilidades CLI" -ForegroundColor Cyan
-Write-Host "          ==============================================" -ForegroundColor Yellow
+Write-Host "KODY - Scanner de Vulnerabilidades CLI" -ForegroundColor Cyan
 Write-Host ""
 
 function Test-Command($cmd) {
@@ -163,9 +162,7 @@ if ($UserPath -notlike "*$BinDir*") {
 }
 
 Write-Host ""
-Write-Host "============================================================"
-Write-Host "        INSTALACION COMPLETADA EXITOSAMENTE!" -ForegroundColor Green
-Write-Host "============================================================"
+Write-Host "INSTALACION COMPLETADA!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Abre una NUEVA terminal PowerShell y ejecuta:" -ForegroundColor Cyan
 Write-Host "  kody --help" -ForegroundColor White

@@ -1,10 +1,6 @@
 #!/bin/bash
-# =============================================================================
-# Kody - Script de Instalación para Linux/macOS
-# =============================================================================
-# Instalación con un solo comando:
-#   curl -fsSL https://raw.githubusercontent.com/yokonad/kody/main/install.sh | bash
-# =============================================================================
+# Kody - Script de Instalacion para Linux/macOS
+# Un solo comando: curl -fsSL https://raw.githubusercontent.com/yokonad/kody/main/install.sh | bash
 
 # Colores
 RED='\033[0;31m'
@@ -16,8 +12,7 @@ WHITE='\033[1;37m'
 RESET='\033[0m'
 
 echo ""
-echo "          KODY - Scanner de Vulnerabilidades CLI"
-echo "          =============================================="
+echo "KODY - Scanner de Vulnerabilidades CLI" -e "${CYAN}"
 echo ""
 
 # Verificar si Rust esta instalado
@@ -157,9 +152,7 @@ if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
 fi
 
 echo ""
-echo "============================================================"
-echo "        INSTALACION COMPLETADA EXITOSAMENTE!" -ForegroundColor Green
-echo "============================================================"
+echo -e "${GREEN}INSTALACION COMPLETADA!${RESET}"
 echo ""
 echo -e "${CYAN}Abre una NUEVA terminal y ejecuta:${RESET}"
 echo -e "  ${WHITE}kody --help${RESET}"
