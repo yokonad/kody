@@ -5,7 +5,7 @@
 #   irm https://raw.githubusercontent.com/yokonad/kody/main/install.ps1 | iex
 # =============================================================================
 
-$host.UI.RawUI.WindowTitle = "Kody - Instalación"
+$host.UI.RawUI.WindowTitle = "Kody - Instalacion"
 
 Write-Host ""
 Write-Host "+============================================================+" -ForegroundColor Cyan
@@ -14,41 +14,11 @@ Write-Host "|              Scanner de Vulnerabilidades CLI              |" -Fore
 Write-Host "+============================================================+" -ForegroundColor Cyan
 Write-Host ""
 
+Write-Host "[INFO] Iniciando instalacion de Kody..." -ForegroundColor Cyan
+Write-Host ""
+
 $global:ErrorOccurred = $false
 $global:ErrorMessage = ""
-
-# Función para mostrar errores SIN cerrar
-function Show-Error($msg) {
-    $host.UI.Write-HostLine("")
-    $host.UI.Write-HostLine("============================================================" -ForegroundColor Red)
-    $host.UI.Write-HostLine("[ERROR] $msg" -ForegroundColor Red)
-    $host.UI.Write-HostLine("============================================================" -ForegroundColor Red)
-    $host.UI.Write-HostLine("")
-    $global:ErrorOccurred = $true
-    $global:ErrorMessage = $msg
-}
-
-# Función para mostrar información
-function Show-Info($msg) {
-    $host.UI.Write-HostLine("[INFO] $msg" -ForegroundColor Cyan)
-}
-
-# Función para mostrar éxito
-function Show-Success($msg) {
-    $host.UI.Write-HostLine("[OK] $msg" -ForegroundColor Green)
-}
-
-# Función para mostrar advertencia
-function Show-Warning($msg) {
-    $host.UI.Write-HostLine("[WARN] $msg" -ForegroundColor Yellow)
-}
-
-# Función para pausar
-function Pause-Script {
-    Write-Host ""
-    Write-Host "Presiona cualquier tecla para salir..." -ForegroundColor Gray
-    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-}
 
 # Verificar si el comando existe
 function Test-Command($cmd) {
@@ -60,8 +30,12 @@ function Test-Command($cmd) {
     }
 }
 
-Write-Info "Iniciando instalacion de Kody..."
-Write-Host ""
+# Función para pausar sin cerrar
+function Pause-Script {
+    Write-Host ""
+    Write-Host "Presiona ENTER para salir..." -ForegroundColor Gray
+    $null = Read-Host
+}
 
 # =============================================================================
 # PASO 1: Instalar Rust
@@ -70,65 +44,63 @@ Write-Host "[PASO 1] Verificando Rust..." -ForegroundColor Magenta
 
 if (Test-Command rustc) {
     $rustVersion = (rustc --version) -replace "rustc ", ""
-    Show-Success "Rust ya esta instalado: $rustVersion"
+    Write-Host "[OK] Rust ya esta instalado: $rustVersion" -ForegroundColor Green
 } else {
     Write-Host "[PASO 1] Instalando Rust..." -ForegroundColor Magenta
-    Show-Info "Rust no encontrado. Iniciando descarga..."
+    Write-Host "[INFO] Rust no encontrado. Iniciando descarga..." -ForegroundColor Cyan
 
     # Descargar rustup-init.exe
     $rustupUrl = "https://win.rustup.rs"
     $rustupPath = "$env:TEMP\rustup-init.exe"
 
     try {
-        Show-Info "Descargando rustup-init.exe..."
+        Write-Host "[INFO] Descargando rustup-init.exe..." -ForegroundColor Cyan
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         Invoke-WebRequest -Uri $rustupUrl -OutFile $rustupPath -UseBasicParsing -TimeoutSec 60
     } catch {
-        Show-Error "No se pudo descargar rustup. Verifica tu conexión a internet."
-        Show-Info "Descarga manualmente desde: https://rustup.rs"
+        Write-Host ""
+        Write-Host "[ERROR] No se pudo descargar rustup." -ForegroundColor Red
+        Write-Host "[INFO] Descarga manualmente desde: https://rustup.rs" -ForegroundColor Cyan
         Pause-Script
         return
     }
 
-    Show-Info "Ejecutando instalador de Rust..."
-    Show-Info "ATENCION: Se abrira una ventana del instalador de Rust."
-    Show-Info "Sigue las instrucciones en pantalla (usa la opcion '1' para instalar predeterminada)."
+    Write-Host "[INFO] Ejecutando instalador de Rust..." -ForegroundColor Cyan
+    Write-Host "[INFO] ATENCION: Se abrira el instalador de Rust." -ForegroundColor Yellow
+    Write-Host "[INFO] Sigue las instrucciones en pantalla." -ForegroundColor Yellow
     Write-Host ""
 
     try {
-        # Ejecutar rustup y esperar
         $process = Start-Process -FilePath $rustupPath -ArgumentList "-y", "--default-toolchain", "stable" -PassThru -Wait
-
         if ($process.ExitCode -ne 0) {
-            Show-Warning "El instalador de Rust pudo haber tenido problemas."
+            Write-Host "[WARN] El instalador pudo haber tenido problemas." -ForegroundColor Yellow
         }
     } catch {
-        Show-Error "Error al ejecutar el instalador de Rust: $_"
-        Show-Info "Descarga e instala Rust manualmente desde: https://rustup.rs"
+        Write-Host ""
+        Write-Host "[ERROR] Error al ejecutar el instalador: $_" -ForegroundColor Red
+        Write-Host "[INFO]Descarga e instala Rust manualmente desde: https://rustup.rs" -ForegroundColor Cyan
         Pause-Script
         return
     }
 
-    # Esperar a que se complete la instalación
-    Show-Info "Esperando finalizacion de instalacion..."
+    Write-Host "[INFO] Esperando finalizacion de instalacion..." -ForegroundColor Cyan
     Start-Sleep -Seconds 5
 
     # Refrescar entorno
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
-
-    # Esperar y verificar instalación
     Start-Sleep -Seconds 3
 
     if (Test-Command rustc) {
         $rustVersion = (rustc --version) -replace "rustc ", ""
-        Show-Success "Rust instalado: $rustVersion"
+        Write-Host "[OK] Rust instalado: $rustVersion" -ForegroundColor Green
     } else {
-        Show-Error "Rust no se pudo instalar correctamente."
-        Show-Info "Por favor, instala Rust manualmente:"
-        Show-Info "1. Ve a: https://rustup.rs"
-        Show-Info "2. Descarga y ejecuta rustup-init.exe"
-        Show-Info "3. Elige la opcion '1) Proceed with default installation'"
-        Show-Info "4. Reinicia PowerShell y vuelve a ejecutar este script"
+        Write-Host ""
+        Write-Host "[ERROR] Rust no se pudo instalar correctamente." -ForegroundColor Red
+        Write-Host "[INFO] Por favor, instala Rust manualmente:" -ForegroundColor Cyan
+        Write-Host "1. Ve a: https://rustup.rs" -ForegroundColor White
+        Write-Host "2. Descarga y ejecuta rustup-init.exe" -ForegroundColor White
+        Write-Host "3. Elige la opcion '1' (default installation)" -ForegroundColor White
+        Write-Host "4. Reinicia PowerShell y vuelve a ejecutar este script" -ForegroundColor White
         Pause-Script
         return
     }
@@ -145,27 +117,28 @@ $KodyDir = "$HOME\kody"
 $ProjectDir = "$KodyDir\kody"
 
 if (Test-Path "$ProjectDir\.git") {
-    Show-Info "El repositorio ya existe. Actualizando..."
+    Write-Host "[INFO] El repositorio ya existe. Actualizando..." -ForegroundColor Cyan
     try {
         Set-Location $ProjectDir
         git pull origin main 2>$null
     } catch {
-        # Si falla el pull, eliminar y clonar de nuevo
-        Show-Warning "No se pudo actualizar. Descargando repositorio fresco..."
+        Write-Host "[WARN] No se pudo actualizar. Descargando repositorio fresco..." -ForegroundColor Yellow
         Remove-Item -Recurse -Force $KodyDir -ErrorAction SilentlyContinue
         git clone https://github.com/yokonad/kody.git $KodyDir 2>$null
     }
 } else {
     if (Test-Path $KodyDir) {
-        Show-Info "Eliminando instalacion anterior..."
+        Write-Host "[INFO] Eliminando instalacion anterior..." -ForegroundColor Cyan
         Remove-Item -Recurse -Force $KodyDir -ErrorAction SilentlyContinue
     }
 
-    Show-Info "Clonando repositorio..."
+    Write-Host "[INFO] Clonando repositorio..." -ForegroundColor Cyan
     try {
         git clone https://github.com/yokonad/kody.git $KodyDir 2>$null
     } catch {
-        Show-Error "No se pudo clonar el repositorio. Verifica tu conexion a internet."
+        Write-Host ""
+        Write-Host "[ERROR] No se pudo clonar el repositorio." -ForegroundColor Red
+        Write-Host "[INFO] Verifica tu conexion a internet." -ForegroundColor Cyan
         Pause-Script
         return
     }
@@ -173,9 +146,10 @@ if (Test-Path "$ProjectDir\.git") {
 
 if (Test-Path $ProjectDir) {
     Set-Location $ProjectDir
-    Show-Success "Repositorio listo"
+    Write-Host "[OK] Repositorio listo" -ForegroundColor Green
 } else {
-    Show-Error "El repositorio no se descargo correctamente."
+    Write-Host ""
+    Write-Host "[ERROR] El repositorio no se descargo correctamente." -ForegroundColor Red
     Pause-Script
     return
 }
@@ -186,28 +160,28 @@ Write-Host ""
 # PASO 3: Compilar proyecto
 # =============================================================================
 Write-Host "[PASO 3] Compilando Kody..." -ForegroundColor Magenta
-Show-Info "Este proceso puede tomar de 5 a 15 minutos..."
-Show-Info "En la primera compilacion se descargan las dependencias de Rust."
+Write-Host "[INFO] Este proceso puede tomar de 5 a 15 minutos..." -ForegroundColor Cyan
+Write-Host "[INFO] En la primera compilacion se descargan las dependencias." -ForegroundColor Gray
+Write-Host ""
 
 # Refrescar PATH
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
-# Verificar que cargo esté disponible
+# Verificar cargo
 if (-not (Test-Command cargo)) {
-    Show-Error "Cargo no esta disponible en el PATH."
-    Show-Info "Cierra esta ventana, abre PowerShell nuevo y ejecuta:"
-    Show-Info "  rustup default stable"
-    Show-Info "Luego vuelve a ejecutar este script."
+    Write-Host ""
+    Write-Host "[ERROR] Cargo no esta disponible en el PATH." -ForegroundColor Red
+    Write-Host "[INFO] Cierra esta ventana y abre PowerShell nuevo." -ForegroundColor Cyan
+    Write-Host "[INFO] Luego ejecuta: rustup default stable" -ForegroundColor White
+    Write-Host "[INFO] Y vuelve a ejecutar este script." -ForegroundColor White
     Pause-Script
     return
 }
 
 try {
     Set-Location $ProjectDir
+    Write-Host "[INFO] Compilando... espera por favor..." -ForegroundColor Cyan
 
-    Show-Info "Compilando... esto puede tardar varios minutos..."
-
-    # Compilar y mostrar progreso
     $cargoOutput = cargo build --release 2>&1
     $lastLines = $cargoOutput | Select-Object -Last 10
     foreach ($line in $lastLines) {
@@ -215,21 +189,24 @@ try {
     }
 
     if ($LASTEXITCODE -ne 0) {
-        Show-Error "La compilacion fallo. Codigo de error: $LASTEXITCODE"
-        Show-Info "Revisa los mensajes de error arriba."
+        Write-Host ""
+        Write-Host "[ERROR] La compilacion fallo." -ForegroundColor Red
+        Write-Host "[INFO] Revisa los mensajes de error arriba." -ForegroundColor Cyan
         Pause-Script
         return
     }
 } catch {
-    Show-Error "Error durante la compilacion: $_"
+    Write-Host ""
+    Write-Host "[ERROR] Error durante la compilacion: $_" -ForegroundColor Red
     Pause-Script
     return
 }
 
 if (Test-Path "target\release\kody.exe") {
-    Show-Success "Compilacion exitosa!"
+    Write-Host "[OK] Compilacion exitosa!" -ForegroundColor Green
 } else {
-    Show-Error "El archivo kody.exe no se encontro despues de la compilacion."
+    Write-Host ""
+    Write-Host "[ERROR] kody.exe no se encontro despues de la compilacion." -ForegroundColor Red
     Pause-Script
     return
 }
@@ -250,17 +227,18 @@ try {
         New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
     }
 } catch {
-    Show-Warning "No se pudo crear el directorio $BinDir"
+    Write-Host "[WARN] No se pudo crear el directorio $BinDir" -ForegroundColor Yellow
 }
 
 # Copiar binario
 try {
     Copy-Item "target\release\kody.exe" $BinPath -Force
-    Show-Success "Kody instalado en: $BinPath"
+    Write-Host "[OK] Kody instalado en: $BinPath" -ForegroundColor Green
 } catch {
-    Show-Error "No se pudo copiar el archivo: $_"
-    Show-Info "Puedes ejecutar Kody directamente desde:"
-    Show-Info "$ProjectDir\target\release\kody.exe"
+    Write-Host ""
+    Write-Host "[ERROR] No se pudo copiar el archivo: $_" -ForegroundColor Red
+    Write-Host "[INFO] Puedes ejecutar Kody desde:" -ForegroundColor Cyan
+    Write-Host "  $ProjectDir\target\release\kody.exe" -ForegroundColor White
     Pause-Script
     return
 }
@@ -270,9 +248,9 @@ $UserPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
 if ($UserPath -notlike "*$BinDir*") {
     try {
         [System.Environment]::SetEnvironmentVariable("Path", "$UserPath;$BinDir", "User")
-        Show-Success "$BinDir agregado al PATH del usuario"
+        Write-Host "[OK] $BinDir agregado al PATH" -ForegroundColor Green
     } catch {
-        Show-Warning "No se pudo agregar al PATH automaticamente."
+        Write-Host "[WARN] No se pudo agregar al PATH automaticamente." -ForegroundColor Yellow
     }
 }
 
