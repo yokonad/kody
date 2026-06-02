@@ -1,137 +1,154 @@
-# Kody - Vulnerability Scanner CLI
+# Kody - Scanner de Vulnerabilidades CLI
 
-A Rust-powered CLI tool for vulnerability scanning with AI integration.
+Herramienta CLI desarrollada en Rust para escaneo de vulnerabilidades con integración de IA.
 
-## Features
+## Características
 
-- **IP/Domain Scanning** - Scan specific targets for vulnerabilities
-- **Auto-Scan** - Automatically discover and scan all devices on your network
-- **Hidden IP Mapping** - Discover IPs with non-standard port configurations
-- **AI Integration** - Optional AI analysis using OpenAI or Anthropic
-- **Offline Mode** - Works without internet using cached vulnerability patterns
-- **Cross-Platform** - Works on Linux, macOS, and Windows
+- **Escaneo de IP/Dominio** - Escanea objetivos específicos en busca de vulnerabilidades
+- **Auto-Escaneo** - Descubre y escanea automáticamente todos los dispositivos en tu red
+- **Mapeo de IPs Ocultas** - Descubre IPs con configuraciones de puertos no estándar
+- **Integración con IA** - Análisis opcional mediante IA usando OpenAI o Anthropic
+- **Modo Sin Conexión** - Funciona sin internet usando patrones de vulnerabilidades cacheados
+- **Multiplataforma** - Funciona en Linux, macOS y Windows
 
-## Requirements
+## Requisitos
 
-- Rust 1.70+ ([install rust](https://rustup.rs))
-- SQLite (usually pre-installed on Linux/macOS)
-- Network access for scanning
+- Rust 1.70+ ([instalar Rust](https://rustup.rs))
+- SQLite (generalmente preinstalado en Linux/macOS)
+- Acceso a la red para realizar escaneos
 
-## Installation
+## Instalación
 
-### Linux/macOS (From Source)
+### Linux / macOS (desde código fuente)
 
 ```bash
-# Clone the repository
-git clone https://github.com/kody-team/kody.git
+# Clonar el repositorio
+git clone https://github.com/yokonad/kody.git
 cd kody/kody
 
-# Build release version
+# Compilar versión de producción
 cargo build --release
 
-# Run
+# Ejecutar
 ./target/release/kody --help
 ```
 
-### Windows (From Source)
+### Windows (desde código fuente)
 
 ```powershell
-# Clone the repository
-git clone https://github.com/kody-team/kody.git
+# Clonar el repositorio
+git clone https://github.com/yokonad/kody.git
 cd kody/kody
 
-# Build release version (requires Rust)
+# Compilar versión de producción (requiere Rust)
 cargo build --release
 
-# Run
+# Ejecutar
 .\target\release\kody.exe --help
 ```
 
-### Quick Start
+## Uso Rápido
 
 ```bash
-# See all commands
+# Ver todos los comandos disponibles
 ./target/release/kody --help
 
-# Scan a target
+# Escanear un objetivo específico
 ./target/release/kody scan 192.168.1.1 --ports 1-1024
 
-# Auto-discover and scan your network
+# Auto-descubrir y escanear tu red
 ./target/release/kody auto-scan
 
-# Map hidden IPs in your network
+# Mapear IPs ocultas en tu red
 ./target/release/kody map-hidden --range 192.168.1.0/24
 ```
 
-## Usage
+## Comandos
 
-### Scan a specific target
+### `kody scan <objetivo>`
+
+Escanea una IP o dominio específico en busca de vulnerabilidades.
 
 ```bash
+# Escanear puertos comunes
 kody scan 192.168.1.1 --ports 1-1024
+
+# Escanear puertos específicos
 kody scan example.com --ports 80,443,8080
+
+# Escanear con análisis de IA
+kody scan 192.168.1.1 --ports 1-1024 --ai
 ```
 
-### Auto-scan your network
+### `kody auto-scan`
+
+Descubre automáticamente todos los dispositivos en tu red local y los escanea.
 
 ```bash
+# Escanear red automáticamente
 kody auto-scan
+
+# Escanear usando una interfaz específica
 kody auto-scan --interface eth0
 ```
 
-### Map hidden IPs (non-standard ports)
+### `kody map-hidden <rango>`
+
+Mapea IPs "ocultas" o con puertos no estándar (común en sistemas de vigilancia, cámaras, etc.).
 
 ```bash
+# Mapeo básico
 kody map-hidden --range 192.168.1.0/24
+
+# Mapeo profundo (más lento pero más exhaustivo)
 kody map-hidden --range 192.168.1.0/24 --deep
 ```
 
-### Configure AI integration
+### `kody config`
+
+Configura el proveedor de IA y la clave API.
 
 ```bash
-kody config --ai-provider openai --ai-key sk-your-key
+# Configurar OpenAI
+kody config --ai-provider openai --ai-key sk-tu-clave
+
+# Ver configuración actual
 kody config --show
 ```
 
-## Commands
+## Opciones
 
-| Command | Description |
-|---------|-------------|
-| `kody scan <target>` | Scan IP or domain for vulnerabilities |
-| `kody auto-scan` | Discover and scan all devices on local network |
-| `kody map-hidden <range>` | Map hidden/subterranean IPs in CIDR range |
-| `kody config` | Configure AI provider and API key |
+| Opción | Descripción |
+|--------|-------------|
+| `--ports <rango>` | Rango de puertos a escanear (por defecto: 1-1024) |
+| `--ai` | Habilitar análisis con IA para los resultados |
+| `--deep` | Modo de escaneo profundo para map-hidden |
+| `--json` | Salida de resultados en formato JSON |
+| `--interface <nombre>` | Interfaz de red a usar para auto-scan |
 
-## Options
-
-- `--ports <range>` - Port range to scan (default: 1-1024)
-- `--ai` - Enable AI analysis for scan results
-- `--deep` - Deep scan mode for map-hidden
-- `--json` - Output results in JSON format
-
-## Architecture
+## Arquitectura
 
 ```
 kody/
 ├── src/
-│   ├── main.rs         # CLI entry point
-│   ├── ascii/          # ASCII art banners
-│   ├── ai/             # AI providers (OpenAI, Anthropic, offline)
-│   ├── scanner/        # Port scanning & vulnerability detection
-│   ├── network/        # Network discovery
-│   ├── db/             # SQLite offline cache
-│   └── config/         # Configuration management
-└── Cargo.toml          # Rust dependencies
+│   ├── main.rs         # Punto de entrada CLI
+│   ├── ascii/          # Arte ASCII para banners
+│   ├── ai/             # Proveedores de IA (OpenAI, Anthropic, offline)
+│   ├── scanner/        # Escaneo de puertos y detección de vulnerabilidades
+│   ├── network/        # Descubrimiento de red
+│   ├── db/             # Cache offline con SQLite
+│   └── config/         # Gestión de configuración
+└── Cargo.toml          # Dependencias Rust
 ```
 
-## Security Note
+## Nota de Seguridad
 
-Tokens are stored in plaintext in `~/.kody/methods.db`. Future versions will include encryption at rest.
+Los tokens se almacenan en texto plano en `~/.kody/methods.db`. Las versiones futuras incluirán cifrado en reposo.
 
-## License
+## Licencia
 
-MIT License - see LICENSE file
+MIT License - ver archivo LICENSE
 
-## Authors
+## Autores
 
 Kody Team
