@@ -12,6 +12,33 @@ function Test-Command($cmd) {
     return $null -ne $null
 }
 
+function Test-CommandFull($cmd) {
+    # Primero probar en PATH
+    if (Test-Command $cmd) { return $true }
+
+    # Buscar en rutas comunes de Windows
+    $commonPaths = @(
+        "C:\Program Files\Git\cmd\$cmd.exe",
+        "C:\Program Files (x86)\Git\cmd\$cmd.exe",
+        "$env:ProgramFiles\Git\cmd\$cmd.exe",
+        "$env:LOCALAPPDATA\Programs\Git\$cmd.exe",
+        "$env:ProgramFiles(x86)\Git\cmd\$cmd.exe"
+    )
+
+    foreach ($p in $commonPaths) {
+        if (Test-Path $p) {
+            # Agregar al PATH si se encuentra en una ruta no estándar
+            $cmdDir = Split-Path $p -Parent
+            if ($env:Path -notlike "*$cmdDir*") {
+                $env:Path = "$cmdDir;$env:Path"
+            }
+            return $true
+        }
+    }
+
+    return $false
+}
+
 function Test-RustInstalled {
     $paths = @(
         "$env:USERPROFILE\.cargo\bin\rustc.exe",
@@ -30,14 +57,20 @@ function Pause-Script {
     $null = Read-Host
 }
 
-# Verificar git
-if (-not (Test-Command git)) {
-    Write-Host "[ERROR] Git no esta instalado." -ForegroundColor Red
+# Verificar git con busqueda extendida
+Write-Host "[INFO] Verificando Git..." -ForegroundColor Cyan
+
+if (-not (Test-CommandFull git)) {
+    Write-Host "[ERROR] Git no esta instalado o no esta en el PATH." -ForegroundColor Red
     Write-Host "[INFO] Descarga Git desde: https://git-scm.com/download/win" -ForegroundColor Cyan
-    Write-Host "[INFO] Luego reinicia PowerShell y ejecuta este script de nuevo." -ForegroundColor Cyan
+    Write-Host "[INFO] Durante la instalacion, marca la opcion 'Git from the command line'" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Despues de instalar Git, cierra esta ventana y abre PowerShell de nuevo." -ForegroundColor Yellow
     Pause-Script
     return
 }
+
+Write-Host "  [OK] Git encontrado" -ForegroundColor Green
 
 # PASO 1: Rust
 Write-Host "[PASO 1] Verificando Rust..." -ForegroundColor Magenta
@@ -98,7 +131,7 @@ if (Test-Path $KodyDir) {
     Remove-Item -Recurse -Force $KodyDir -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
 
-    # Verificar que se elimin6
+    # Verificar que se eliminó
     if (Test-Path $KodyDir) {
         Write-Host "  [ERROR] No se pudo eliminar $KodyDir" -ForegroundColor Red
         Write-Host "  [INFO] Cierra cualquier programa que pueda estar usando esa carpeta." -ForegroundColor Cyan
