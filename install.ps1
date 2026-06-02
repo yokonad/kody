@@ -147,10 +147,23 @@ Write-Host "[PASO 3] Configurando PATH..." -ForegroundColor Magenta
 $UserPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
 if ($UserPath -notlike "*$BinDir*") {
     [System.Environment]::SetEnvironmentVariable("Path", "$UserPath;$BinDir", "User")
+    $env:Path = "$BinDir;$env:Path"
     Write-Host "  [OK] PATH actualizado (agregado: $BinDir)" -ForegroundColor Green
-    Write-Host "  [INFO] Abre una NUEVA terminal para usar kody" -ForegroundColor Cyan
+    Write-Host "  [INFO] Abre una NUEVA terminal PowerShell (cierra y abre de nuevo)" -ForegroundColor Cyan
 } else {
+    $env:Path = "$BinDir;$env:Path"
     Write-Host "  [OK] PATH ya configurado" -ForegroundColor Green
+}
+
+# Verify installation
+Write-Host ""
+Write-Host "[VERIFICACION]" -ForegroundColor Magenta
+if (Test-Path $BinPath) {
+    Write-Host "  [OK] kody.exe encontrado en: $BinPath" -ForegroundColor Green
+    Write-Host "  [OK] Para usar AHORA en esta terminal: refreshenv" -ForegroundColor Cyan
+    Write-Host "  [OK] O ejecuta en una NUEVA terminal: kody --help" -ForegroundColor Cyan
+} else {
+    Write-Host "  [ERROR] kody.exe no encontrado!" -ForegroundColor Red
 }
 
 Write-Host ""
