@@ -21,15 +21,15 @@ pub mod colors {
 pub fn banner() -> String {
     format!(
         r#"
-{C}╔══════════════════════════════════════════════════════════════════╗{R}
-{C}║{R}                                                          {C}║{R}
-{C}║{R}                          {BR}KODY{C}                          {C}║{R}
-{C}║{R}                                                          {C}║{R}
-{C}║{R}                      {W}Vulnerability Scanner{W}                  {C}║{R}
-{C}║{R}                          {Y}v0.1.0{W}                        {C}║{R}
-{C}║{R}                          {W}Rust-powered | AI-enabled{W}           {C}║{R}
-{C}║{R}                                                          {C}║{R}
-{C}╚══════════════════════════════════════════════════════════════════╝{R}
+{C}+--------------------------------------------------------------------+{R}
+{C}|{R}                                                                  {C}|{R}
+{C}|{R}                          {BR}KODY{C}                          {C}|{R}
+{C}|{R}                                                                  {C}|{R}
+{C}|{R}                      {W}Vulnerability Scanner{W}                  {C}|{R}
+{C}|{R}                          {Y}v0.3.0{W}                             {C}|{R}
+{C}|{R}                      {W}Rust-powered | AI-enabled{W}              {C}|{R}
+{C}|{R}                                                                  {C}|{R}
+{C}+--------------------------------------------------------------------+{R}
 "#,
         C = colors::CYAN,
         R = colors::RESET,
