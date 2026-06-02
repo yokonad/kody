@@ -30,34 +30,61 @@ if (Test-Command rustc) {
     $rustVersion = (rustc --version) -replace "rustc ", ""
     Write-Host "[OK] Rust instalado: $rustVersion" -ForegroundColor Green
 } else {
-    Write-Host "[INFO] Rust no encontrado. Descargando..." -ForegroundColor Cyan
+    Write-Host "[INFO] Rust no encontrado. Descargando rustup..." -ForegroundColor Cyan
+
     $rustupUrl = "https://win.rustup.rs"
     $rustupPath = "$env:TEMP\rustup-init.exe"
+
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         Invoke-WebRequest -Uri $rustupUrl -OutFile $rustupPath -UseBasicParsing
+        Write-Host "[OK] rustup-init.exe descargado" -ForegroundColor Green
     } catch {
         Write-Host "[ERROR] No se pudo descargar rustup." -ForegroundColor Red
         Write-Host "[INFO] Descarga manualmente desde https://rustup.rs" -ForegroundColor Cyan
         Pause-Script
         return
     }
-    Write-Host "[INFO] Ejecutando instalador de Rust..." -ForegroundColor Cyan
-    Write-Host "[INFO] Sigue las instrucciones en pantalla." -ForegroundColor Yellow
-    try {
-        Start-Process -FilePath $rustupPath -ArgumentList "-y" -Wait
-    } catch {
-        Write-Host "[ERROR] Error al ejecutar el instalador." -ForegroundColor Red
-        Pause-Script
-        return
-    }
-    Start-Sleep -Seconds 5
+
+    Write-Host "[INFO] Instalando Rust (usa opcion 1 para instalacion default)..." -ForegroundColor Cyan
+    Write-Host "[INFO] El instalador se abrira en una ventana separada." -ForegroundColor Yellow
+    Write-Host ""
+
+    # Ejecutar rustup con las opciones correctas
+    # -y = yes to all
+    # --default-toolchain stable = install stable as default
+    # --profile minimal = minimal install
+    $pinfo = New-Object System.Diagnostics.ProcessStartInfo
+    $pinfo.FileName = $rustupPath
+    $pinfo.Arguments = "-y --default-toolchain stable --profile minimal"
+    $pinfo.UseShellExecute = $true
+    $pinfo.WindowStyle = "Normal"
+    $p = New-Object System.Diagnostics.Process
+    $p.StartInfo = $pinfo
+    $p.Start() | Out-Null
+    $p.WaitForExit()
+
+    $exitCode = $p.ExitCode
+    Write-Host "[INFO] rustup finalizo con codigo: $exitCode" -ForegroundColor Cyan
+
+    # Esperar un poco mas para que se complete la instalacion
+    Start-Sleep -Seconds 10
+
+    # Refrescar PATH
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+
+    # Verificar
+    Start-Sleep -Seconds 3
+
     if (Test-Command rustc) {
-        Write-Host "[OK] Rust instalado correctamente" -ForegroundColor Green
+        $rustVersion = (rustc --version) -replace "rustc ", ""
+        Write-Host "[OK] Rust instalado: $rustVersion" -ForegroundColor Green
     } else {
         Write-Host "[ERROR] Rust no se instalo correctamente." -ForegroundColor Red
-        Write-Host "[INFO] Instala Rust manualmente desde https://rustup.rs" -ForegroundColor Cyan
+        Write-Host "[INFO] Posibles soluciones:" -ForegroundColor Cyan
+        Write-Host "  1. Ve a https://rustup.rs y descarga rustup-init.exe" -ForegroundColor White
+        Write-Host "  2. Ejecútalo manualmente y elige opcion 1" -ForegroundColor White
+        Write-Host "  3. Reinicia PowerShell y ejecuta este script de nuevo" -ForegroundColor White
         Pause-Script
         return
     }
@@ -100,15 +127,15 @@ Write-Host "[INFO] Esto puede tomar 5-15 minutos..." -ForegroundColor Cyan
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
 if (-not (Test-Command cargo)) {
-    Write-Host "[ERROR] Cargo no disponible. Reinicia PowerShell." -ForegroundColor Red
-    Write-Host "[INFO] Ejecuta: rustup default stable" -ForegroundColor White
+    Write-Host "[ERROR] Cargo no disponible." -ForegroundColor Red
+    Write-Host "[INFO] Ejecuta en una nueva terminal: rustup default stable" -ForegroundColor White
     Pause-Script
     return
 }
 
 try {
     Set-Location $ProjectDir
-    Write-Host "[INFO] Compilando..." -ForegroundColor Cyan
+    Write-Host "[INFO] Compilando (puede tardar varios minutos)..." -ForegroundColor Cyan
     cargo build --release 2>$null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERROR] Compilacion fallo." -ForegroundColor Red
