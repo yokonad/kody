@@ -30,10 +30,11 @@ function Pause-Script {
     $null = Read-Host
 }
 
-# Verificar git primero
+# Verificar git
 if (-not (Test-Command git)) {
     Write-Host "[ERROR] Git no esta instalado." -ForegroundColor Red
     Write-Host "[INFO] Descarga Git desde: https://git-scm.com/download/win" -ForegroundColor Cyan
+    Write-Host "[INFO] Luego reinicia PowerShell y ejecuta este script de nuevo." -ForegroundColor Cyan
     Pause-Script
     return
 }
@@ -91,41 +92,47 @@ Write-Host "[PASO 2] Descargando Kody..." -ForegroundColor Magenta
 $KodyDir = "$HOME\kody"
 $ProjectDir = "$KodyDir\kody"
 
-if (Test-Path "$ProjectDir\.git") {
-    Write-Host "  [INFO] Repositorio existe. Actualizando..." -ForegroundColor Cyan
-    Set-Location $ProjectDir
-    $output = git pull origin main 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "  [WARN] No se pudo actualizar. Eliminando y clonando de nuevo..." -ForegroundColor Yellow
-        Remove-Item -Recurse -Force $KodyDir -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 2
-    }
-}
+# Si el directorio existe, eliminarlo primero
+if (Test-Path $KodyDir) {
+    Write-Host "  [INFO] Limpiando instalacion anterior..." -ForegroundColor Cyan
+    Remove-Item -Recurse -Force $KodyDir -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
 
-if (-not (Test-Path "$ProjectDir\.git")) {
-    Write-Host "  [INFO] Clonando repositorio..." -ForegroundColor Cyan
-
+    # Verificar que se elimin6
     if (Test-Path $KodyDir) {
-        Write-Host "  [INFO] Limpiando directorio anterior..." -ForegroundColor Cyan
-        Remove-Item -Recurse -Force $KodyDir -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 2
-    }
-
-    $output = git clone https://github.com/yokonad/kody.git $KodyDir 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "  [ERROR] Error al clonar: $output" -ForegroundColor Red
-        Write-Host "  [INFO] Verifica tu conexion a internet." -ForegroundColor Cyan
+        Write-Host "  [ERROR] No se pudo eliminar $KodyDir" -ForegroundColor Red
+        Write-Host "  [INFO] Cierra cualquier programa que pueda estar usando esa carpeta." -ForegroundColor Cyan
+        Write-Host "  [INFO] Luego cierra esta ventana y vuelve a ejecutar el script." -ForegroundColor Cyan
         Pause-Script
         return
     }
 }
 
+Write-Host "  [INFO] Clonando repositorio (puede tardar un momento)..." -ForegroundColor Cyan
+
+# Clonar con salida de error capturada correctamente
+$cloneResult = git clone --depth 1 https://github.com/yokonad/kody.git $KodyDir 2>&1
+$cloneSuccess = $LASTEXITCODE -eq 0
+
+if (-not $cloneSuccess) {
+    Write-Host "  [ERROR] Error al clonar repositorio (exit code: $LASTEXITCODE)" -ForegroundColor Red
+    if ($cloneResult) {
+        Write-Host "  Detalles:" -ForegroundColor Red
+        foreach ($line in $cloneResult) {
+            Write-Host "    $line" -ForegroundColor Yellow
+        }
+    }
+    Write-Host "  [INFO] Verifica tu conexion a internet." -ForegroundColor Cyan
+    Write-Host "  [INFO] Prueba manualmente en otra terminal:" -ForegroundColor Cyan
+    Write-Host "    git clone https://github.com/yokonad/kody.git" -ForegroundColor White
+    Pause-Script
+    return
+}
+
 if (Test-Path $ProjectDir) {
-    Set-Location $ProjectDir
     Write-Host "  [OK] Repositorio listo" -ForegroundColor Green
 } else {
-    Write-Host "  [ERROR] Error al descargar repositorio." -ForegroundColor Red
-    Write-Host "  [INFO] Posible problema: $KodyDir" -ForegroundColor Cyan
+    Write-Host "  [ERROR] El repositorio no se descargo correctamente." -ForegroundColor Red
     Pause-Script
     return
 }
