@@ -1,5 +1,5 @@
 # Kody - Script de Instalacion para Windows PowerShell
-# Un solo comando: irm https://raw.githubusercontent.com/yokonad/kody/main/install.ps1 | iex
+# Un solo comando: irm https://raw.githubusercontent.com/yokonad/kody/main/install.ps1?t=$(Get-Date -Format "yyyyMMddHHmmss") | iex
 
 $host.UI.RawUI.WindowTitle = "Kody - Instalacion"
 
@@ -8,8 +8,12 @@ Write-Host "KODY - Scanner de Vulnerabilidades CLI" -ForegroundColor Cyan
 Write-Host ""
 
 function Test-Command($cmd) {
-    $null = Get-Command $cmd -ErrorAction SilentlyContinue
-    return $null -ne $null
+    try {
+        Get-Command $cmd -ErrorAction Stop | Out-Null
+        return $true
+    } catch {
+        return $false
+    }
 }
 
 function Test-CommandInPath($cmd) {
@@ -181,13 +185,32 @@ Write-Host "  [INFO] Git version: $(git --version)" -ForegroundColor Cyan
 # Limpiar instalacion anterior
 if (Test-Path $KodyDir) {
     Write-Host "  [INFO] Limpiando instalacion anterior..." -ForegroundColor Cyan
-    Remove-Item -Recurse -Force $KodyDir -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 3
+    try {
+        Remove-Item -Recurse -Force $KodyDir
+    } catch {
+        Write-Host "  [WARN] Error: $_ - reintentando en 3s..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 3
+        try {
+            Remove-Item -Recurse -Force $KodyDir
+        } catch {
+            # Ambos intentos fallaron, continuar con logica de reintento
+        }
+    }
 
     if (Test-Path $KodyDir) {
         Write-Host "  [WARN] No se pudo eliminar. Reintentando..." -ForegroundColor Yellow
         Start-Sleep -Seconds 2
-        Remove-Item -Recurse -Force $KodyDir -ErrorAction SilentlyContinue
+        try {
+            Remove-Item -Recurse -Force $KodyDir
+        } catch {
+            Write-Host "  [WARN] Error: $_ - reintentando en 3s..." -ForegroundColor Yellow
+            Start-Sleep -Seconds 3
+            try {
+                Remove-Item -Recurse -Force $KodyDir
+            } catch {
+                # Ambos reintentos fallaron, continuar con manejo de error
+            }
+        }
     }
 
     if (Test-Path $KodyDir) {
@@ -266,7 +289,8 @@ $env:CARGO_HOME = "$env:USERPROFILE\.cargo"
 $env:RUSTUP_HOME = "$env:USERPROFILE\.rustup"
 $env:Path = "$env:CARGO_HOME\bin;" + [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
-if (-not (Test-Command cargo)) {
+cargo --version 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) {
     Write-Host "  [ERROR] Cargo no disponible." -ForegroundColor Red
     Pause-Script
     return
