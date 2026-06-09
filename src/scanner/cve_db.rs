@@ -24,6 +24,8 @@ struct CveRule {
     cve: &'static str,
     severity: Severity,
     description: &'static str,
+    /// What an attacker could achieve — "qué podría dañar".
+    impact: &'static str,
 }
 
 /// The curated rule set. Small on purpose: every entry is verified.
@@ -35,6 +37,7 @@ const CVE_RULES: &[CveRule] = &[
         cve: "CVE-2024-6387",
         severity: Severity::Critical,
         description: "regreSSHion: unauthenticated RCE in OpenSSH sshd (8.5p1-9.7p1)",
+        impact: "RCE pre-autenticación como root: control total del servidor (robo/borrado de datos, pivote a la red interna, persistencia).",
     },
     CveRule {
         product: "openssh",
@@ -43,6 +46,7 @@ const CVE_RULES: &[CveRule] = &[
         cve: "CVE-2023-38408",
         severity: Severity::High,
         description: "RCE via forwarded ssh-agent PKCS#11 provider (fixed in 9.3p2)",
+        impact: "Ejecución de código si una víctima reenvía su agente SSH (ForwardAgent) contra este host.",
     },
     CveRule {
         product: "apache",
@@ -51,6 +55,7 @@ const CVE_RULES: &[CveRule] = &[
         cve: "CVE-2021-41773",
         severity: Severity::Critical,
         description: "Apache httpd path traversal / RCE (2.4.49-2.4.50)",
+        impact: "Lectura de archivos arbitrarios (/etc/passwd, código fuente, claves) y RCE si mod_cgi está activo.",
     },
     CveRule {
         product: "nginx",
@@ -59,6 +64,7 @@ const CVE_RULES: &[CveRule] = &[
         cve: "CVE-2021-23017",
         severity: Severity::High,
         description: "nginx DNS resolver off-by-one heap write (before 1.21.0)",
+        impact: "Corrupción de memoria en el resolver: posible RCE o caída del servicio (DoS).",
     },
     CveRule {
         product: "vsftpd",
@@ -67,6 +73,7 @@ const CVE_RULES: &[CveRule] = &[
         cve: "CVE-2011-2523",
         severity: Severity::Critical,
         description: "vsftpd 2.3.4 contains a backdoor giving a root shell",
+        impact: "Backdoor: shell root inmediato sin credenciales = control total del servidor.",
     },
     CveRule {
         product: "proftpd",
@@ -75,6 +82,7 @@ const CVE_RULES: &[CveRule] = &[
         cve: "CVE-2019-12815",
         severity: Severity::Critical,
         description: "ProFTPD mod_copy arbitrary file copy / RCE (before 1.3.6)",
+        impact: "Copia/lectura/escritura arbitraria de archivos: subir una webshell o robar datos → RCE.",
     },
     CveRule {
         product: "exim",
@@ -83,6 +91,7 @@ const CVE_RULES: &[CveRule] = &[
         cve: "CVE-2019-10149",
         severity: Severity::Critical,
         description: "Exim 'The Return of the WIZard' RCE (4.87-4.91)",
+        impact: "RCE como root vía un email manipulado: control del servidor de correo e intercepción de correo.",
     },
     CveRule {
         product: "samba",
@@ -91,6 +100,7 @@ const CVE_RULES: &[CveRule] = &[
         cve: "CVE-2017-7494",
         severity: Severity::Critical,
         description: "SambaCry: remote code execution via writable share (3.5.0-4.6.3)",
+        impact: "RCE subiendo una librería a un share escribible: control del servidor de archivos.",
     },
 ];
 
@@ -119,12 +129,11 @@ pub fn match_cves(product: &str, version: &str, port: u16) -> Vec<Vulnerability>
             .unwrap_or(true);
 
         if above_floor && below_fix {
-            out.push(Vulnerability::new(
-                Some(rule.cve),
-                rule.description,
-                rule.severity,
-                port,
-            ));
+            out.push(
+                Vulnerability::new(Some(rule.cve), rule.description, rule.severity, port)
+                    .with_impact(rule.impact)
+                    .with_location(&format!("{} {} en puerto {}", product, version, port)),
+            );
         }
     }
 
@@ -135,68 +144,89 @@ pub fn match_cves(product: &str, version: &str, port: u16) -> Vec<Vulnerability>
 /// CVE id — these describe risk, not a confirmed vulnerability.
 pub fn exposure_findings(port: u16) -> Vec<Vulnerability> {
     let mut v = Vec::new();
-    let mut add = |desc: &str, sev: Severity| v.push(Vulnerability::new(None, desc, sev, port));
+    let mut add = |desc: &str, sev: Severity, impact: &str| {
+        v.push(
+            Vulnerability::new(None, desc, sev, port)
+                .with_impact(impact)
+                .with_location(&format!("puerto {}", port)),
+        );
+    };
 
     match port {
         23 | 2323 => add(
-            "Telnet exposed: credentials and data travel in cleartext. Use SSH.",
+            "Telnet expuesto: credenciales y datos viajan en texto plano. Usa SSH.",
             Severity::High,
+            "Cualquiera en la red captura usuario/contraseña y secuestra la sesión.",
         ),
         21 => add(
-            "FTP exposed: control channel is cleartext and may allow anonymous login. Prefer SFTP/FTPS.",
+            "FTP expuesto: canal de control en claro y posible login anónimo. Prefiere SFTP/FTPS.",
             Severity::Medium,
+            "Robo de credenciales y de archivos; con login anónimo, acceso directo a ficheros.",
         ),
         6379 => add(
-            "Redis exposed to the network: defaults to NO authentication. Bind to localhost or require a password.",
+            "Redis expuesto a la red: por defecto SIN autenticación. Bind a localhost o pon contraseña.",
             Severity::Critical,
+            "Lectura/escritura de toda la base y, a menudo, RCE escribiendo claves SSH o cronjobs.",
         ),
         27017 | 27018 => add(
-            "MongoDB exposed to the network: verify authentication is enabled and access is firewalled.",
+            "MongoDB expuesto a la red: verifica que la autenticación esté activa y con firewall.",
             Severity::Critical,
+            "Si está sin auth: volcado o borrado de TODA la base de datos.",
         ),
         11211 => add(
-            "Memcached exposed: no authentication by design and usable for DDoS amplification. Firewall it.",
+            "Memcached expuesto: sin autenticación por diseño y usable para amplificación DDoS.",
             Severity::Critical,
+            "Lectura de datos cacheados y abuso para lanzar DDoS contra terceros desde tu IP.",
         ),
         9200 | 9300 => add(
-            "Elasticsearch exposed: verify auth (X-Pack/security) is enabled; open clusters leak all data.",
+            "Elasticsearch expuesto: verifica que la seguridad (X-Pack) esté activa.",
             Severity::High,
+            "Clúster abierto = volcado de todos los índices (PII, logs, datos sensibles).",
         ),
         3306 => add(
-            "MySQL/MariaDB reachable from the network: restrict to trusted hosts via firewall.",
+            "MySQL/MariaDB accesible desde la red: restringe a hosts confiables con firewall.",
             Severity::High,
+            "Superficie de fuerza bruta; si caen las credenciales, acceso total a la base.",
         ),
         5432 => add(
-            "PostgreSQL reachable from the network: restrict access and require strong authentication.",
+            "PostgreSQL accesible desde la red: restringe acceso y exige autenticación fuerte.",
             Severity::High,
+            "Fuerza bruta de credenciales → lectura/escritura de toda la base.",
         ),
         1433 => add(
-            "Microsoft SQL Server reachable from the network: restrict access via firewall.",
+            "Microsoft SQL Server accesible desde la red: restringe el acceso con firewall.",
             Severity::High,
+            "Fuerza bruta; con xp_cmdshell habilitado puede derivar en RCE en el host.",
         ),
         5984 => add(
-            "CouchDB exposed: verify admin credentials are set (avoid 'admin party' mode).",
+            "CouchDB expuesto: verifica credenciales de admin (evita el modo 'admin party').",
             Severity::High,
+            "En 'admin party' = control total de la base sin autenticación.",
         ),
         3389 => add(
-            "RDP exposed to the network: a top ransomware entry point. Put it behind a VPN and enable NLA.",
+            "RDP expuesto a la red: principal puerta de entrada de ransomware. Ponlo tras VPN + NLA.",
             Severity::High,
+            "Fuerza bruta/credential stuffing → escritorio remoto y movimiento lateral.",
         ),
         5900 | 5901 => add(
-            "VNC exposed: ensure a strong password is set; many VNC servers allow weak/no auth.",
+            "VNC expuesto: asegúrate de tener contraseña fuerte; muchos permiten auth débil o nula.",
             Severity::High,
+            "Control del escritorio remoto: ver pantalla, teclear, instalar malware.",
         ),
         445 | 139 => add(
-            "SMB/NetBIOS exposed: limit to trusted networks; a frequent lateral-movement vector.",
+            "SMB/NetBIOS expuesto: limítalo a redes confiables; vector frecuente de lateral movement.",
             Severity::Medium,
+            "Enumeración de shares y movimiento lateral/ransomware (p. ej. EternalBlue en versiones viejas).",
         ),
         80 | 8080 | 8000 | 8008 | 8888 => add(
-            "Plain HTTP (no TLS): traffic is unencrypted. Redirect to HTTPS.",
+            "HTTP en claro (sin TLS): el tráfico va sin cifrar. Redirige a HTTPS.",
             Severity::Low,
+            "Interceptable en la red: sesiones, formularios y credenciales en texto plano.",
         ),
         25 => add(
-            "SMTP exposed: verify it is not an open relay and that STARTTLS is enforced.",
+            "SMTP expuesto: verifica que no sea open relay y que STARTTLS esté forzado.",
             Severity::Info,
+            "Si es open relay: abuso para enviar spam/phishing en tu nombre.",
         ),
         _ => {}
     }

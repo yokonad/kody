@@ -56,6 +56,12 @@ pub struct Vulnerability {
     pub severity: Severity,
     pub affected_port: u16,
     pub service: Option<String>,
+    /// What an attacker could achieve — "qué se podría dañar".
+    #[serde(default)]
+    pub impact: Option<String>,
+    /// Where it lives / can be hit — "dónde" (endpoint, header, service).
+    #[serde(default)]
+    pub location: Option<String>,
 }
 
 impl Vulnerability {
@@ -66,11 +72,25 @@ impl Vulnerability {
             severity,
             affected_port: port,
             service: None,
+            impact: None,
+            location: None,
         }
     }
 
     pub fn with_service(mut self, service: &str) -> Self {
         self.service = Some(service.to_string());
+        self
+    }
+
+    /// Set the attacker-impact narrative ("qué podría dañar").
+    pub fn with_impact(mut self, impact: &str) -> Self {
+        self.impact = Some(impact.to_string());
+        self
+    }
+
+    /// Set where the issue can be reached ("dónde").
+    pub fn with_location(mut self, location: &str) -> Self {
+        self.location = Some(location.to_string());
         self
     }
 

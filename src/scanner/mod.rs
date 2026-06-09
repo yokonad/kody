@@ -1,6 +1,7 @@
 pub mod ports;
 pub mod vuln_rules;
 pub mod banner;
+pub mod web;
 pub mod cve_db;
 
 pub mod ip_scan;
@@ -29,7 +30,12 @@ use crate::ai::{ScanResult, ServiceInfo};
 /// Assess a single open port: fingerprint it, then collect real CVE matches
 /// (only when a version was detected) plus honest exposure findings.
 pub async fn assess_port(target: &str, port: u16, timeout_ms: u64) -> (ServiceInfo, Vec<Vulnerability>) {
-    let fp = grab_fingerprint(target, port, timeout_ms).await;
+    // Web ports get a full HTTP recon (fingerprint + security-header findings);
+    // everything else just reads the connect banner.
+    let (fp, web_findings) = match banner::web_scheme(port) {
+        Some(tls) => web::analyze_web(target, port, tls, timeout_ms).await,
+        None => (grab_fingerprint(target, port, timeout_ms).await, Vec::new()),
+    };
 
     // Prefer the detected product as the service label; fall back to the port map.
     let service_label = fp
@@ -49,6 +55,11 @@ pub async fn assess_port(target: &str, port: u16, timeout_ms: u64) -> (ServiceIn
         for v in match_cves(product, version, port) {
             vulns.push(v.with_service(&service_label));
         }
+    }
+
+    // HTTP header / hygiene findings (web ports only).
+    for v in web_findings {
+        vulns.push(v.with_service(&service_label));
     }
 
     // Exposure findings apply regardless of version.

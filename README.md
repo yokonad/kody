@@ -156,6 +156,13 @@ Sin clave, el **modo offline** genera el informe con la base de CVEs local.
   vsftpd 2.3.4 backdoor, SambaCry, Exim, nginx CVE-2021-23017).
 - **Exposiciones**: servicios sensibles (Telnet en claro, Redis/Mongo/MySQL
   expuestos, RDP/VNC, SMB…) se reportan como riesgo honesto, **sin CVE inventada**.
+- **Análisis web** (puertos HTTP/HTTPS): cabeceras de seguridad ausentes (HSTS,
+  CSP, X-Frame-Options, nosniff), redirección HTTP→HTTPS, cookies inseguras y
+  divulgación de versión.
+- **Impacto y ubicación**: cada hallazgo explica **qué podría dañar un atacante**
+  y **dónde** (puerto, cabecera o servicio).
+- **Superficie de ataque**: resumen final con riesgo global, puntos de entrada y
+  una lista priorizada de **qué arreglar primero**.
 
 ## Arquitectura
 

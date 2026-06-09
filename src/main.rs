@@ -172,20 +172,90 @@ fn main() -> ExitCode {
     }
 }
 
-fn print_vuln_line(vuln: &scanner::Vulnerability) {
-    let color = match vuln.severity {
+fn sev_color(sev: scanner::Severity) -> &'static str {
+    match sev {
         scanner::Severity::Critical => RED,
         scanner::Severity::High => "\x1b[91m",
         scanner::Severity::Medium => YELLOW,
         scanner::Severity::Low => "\x1b[34m",
-        scanner::Severity::Info => RESET,
-    };
+        scanner::Severity::Info => GREY,
+    }
+}
+
+fn print_vuln_line(vuln: &scanner::Vulnerability) {
+    let color = sev_color(vuln.severity);
     print!("{}│    [{}{}{}]", CYAN, color, vuln.severity, RESET);
     if let Some(cve) = &vuln.cve_id {
         print!(" {}{}{}", color, cve, RESET);
     }
     println!(" {}(port {}){}", GREY, vuln.affected_port, RESET);
     println!("{}│      {}{}", CYAN, vuln.description, RESET);
+    if let Some(loc) = &vuln.location {
+        println!("{}│        {}dónde  {}: {}", CYAN, GREY, RESET, loc);
+    }
+    if let Some(imp) = &vuln.impact {
+        println!("{}│        {}impacto{}: {}{}{}", CYAN, GREY, RESET, YELLOW, imp, RESET);
+    }
+}
+
+/// Print the "attack surface" summary: overall risk, entry points, priorities.
+fn print_attack_surface(result: &ai::ScanResult) {
+    use scanner::Severity;
+    let v = &result.vulnerabilities;
+    let count = |s: Severity| v.iter().filter(|x| x.severity == s).count();
+    let (c, h, m, l, i) = (
+        count(Severity::Critical),
+        count(Severity::High),
+        count(Severity::Medium),
+        count(Severity::Low),
+        count(Severity::Info),
+    );
+    let (overall, ocolor) = if c > 0 {
+        ("CRÍTICO", RED)
+    } else if h > 0 {
+        ("ALTO", "\x1b[91m")
+    } else if m > 0 {
+        ("MEDIO", YELLOW)
+    } else if l > 0 {
+        ("BAJO", "\x1b[34m")
+    } else if i > 0 {
+        ("INFORMATIVO", GREY)
+    } else {
+        ("LIMPIO", GREEN)
+    };
+
+    println!("\n{}┌─ Superficie de ataque{}", CYAN, RESET);
+    println!("{}│{}", CYAN, RESET);
+    println!("{}│  Riesgo global: {}{}{}", CYAN, ocolor, overall, RESET);
+    println!("{}│  Puntos de entrada: {:?}{}", CYAN, result.open_ports, RESET);
+    println!(
+        "{}│  Hallazgos: {}{} críticos{} · {}{} altos{} · {}{} medios{} · {}{} bajos{} · {}{} info{}",
+        CYAN, RED, c, RESET, "\x1b[91m", h, RESET, YELLOW, m, RESET, "\x1b[34m", l, RESET, GREY, i, RESET
+    );
+
+    // Most severe, actionable findings first (Info excluded from priorities).
+    let priorities: Vec<&scanner::Vulnerability> =
+        v.iter().filter(|x| x.severity != Severity::Info).take(3).collect();
+    if !priorities.is_empty() {
+        println!("{}│{}", CYAN, RESET);
+        println!("{}│  Prioridades (qué arreglar primero):{}", CYAN, RESET);
+        for (n, p) in priorities.iter().enumerate() {
+            let col = sev_color(p.severity);
+            print!("{}│   {}) [{}{}{}] {}", CYAN, n + 1, col, p.severity, RESET, p.description);
+            if let Some(cve) = &p.cve_id {
+                print!(" {}{}{}", col, cve, RESET);
+            }
+            println!();
+            if let Some(imp) = &p.impact {
+                println!("{}│        {}→ podría: {}{}", CYAN, YELLOW, imp, RESET);
+            }
+            if let Some(loc) = &p.location {
+                println!("{}│        {}→ dónde : {}{}", CYAN, GREY, loc, RESET);
+            }
+        }
+    }
+    println!("{}│{}", CYAN, RESET);
+    println!("{}└{}[Fin del informe]{}", CYAN, "─".repeat(40), RESET);
 }
 
 async fn async_scan(target: &str, ports: &str, ai_analysis: bool, db: Option<&db::Database>) -> anyhow::Result<()> {
@@ -265,6 +335,9 @@ async fn async_scan(target: &str, ports: &str, ai_analysis: bool, db: Option<&db
 
     println!("{}│{}", CYAN, RESET);
     println!("{}└{}[Listo]{}", CYAN, "─".repeat(40), RESET);
+
+    // Pentester-style summary: overall risk, entry points, what to fix first.
+    print_attack_surface(&result);
 
     if ai_analysis {
         run_ai_analysis(result).await;

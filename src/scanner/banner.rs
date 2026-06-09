@@ -51,8 +51,19 @@ fn product_version_re() -> &'static Regex {
     })
 }
 
+/// If `port` is an HTTP(S) port, return `Some(tls)` (true = HTTPS). Else `None`.
+pub(crate) fn web_scheme(port: u16) -> Option<bool> {
+    if HTTPS_PORTS.contains(&port) {
+        Some(true)
+    } else if HTTP_PORTS.contains(&port) {
+        Some(false)
+    } else {
+        None
+    }
+}
+
 /// Parse a product + version out of an arbitrary banner / header string.
-fn parse_product_version(text: &str) -> (Option<String>, Option<String>) {
+pub(crate) fn parse_product_version(text: &str) -> (Option<String>, Option<String>) {
     let text = text.trim();
 
     // SSH greeting: "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.1"
