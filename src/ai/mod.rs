@@ -59,14 +59,18 @@ impl std::fmt::Display for AiError {
 
 impl std::error::Error for AiError {}
 
-/// Factory function to create the appropriate AI provider based on configuration
+/// Factory: pick the AI provider from the key + optional provider hint.
+///
+/// If `provider_name` is not given, the provider is auto-detected from the key
+/// format (Anthropic / OpenAI / Google). With no usable key, falls back to the
+/// fully-offline analyzer.
 pub fn create_provider(api_key: Option<String>, provider_name: Option<String>) -> Box<dyn AiProvider> {
     if let Some(key) = api_key {
         if !key.is_empty() {
-            match provider_name.as_deref() {
-                Some("anthropic") => return Box::new(OpenAiProvider::new(Some(key), Some("anthropic".to_string()))),
-                _ => return Box::new(OpenAiProvider::new(Some(key), None)),
-            }
+            let provider = provider_name
+                .or_else(|| crate::config::detect_provider(&key).map(|s| s.to_string()))
+                .unwrap_or_else(|| "openai".to_string());
+            return Box::new(OpenAiProvider::new(Some(key), Some(provider)));
         }
     }
     Box::new(OfflineProvider::new())

@@ -1,176 +1,112 @@
-# Kody - Script de Instalacion para Windows PowerShell
-# Un solo comando: irm https://raw.githubusercontent.com/yokonad/kody/main/install.ps1?t=$(Get-Date -Format "yyyyMMddHHmmss") | iex
+# Kody - Instalador para Windows (binario pre-compilado, ~10 segundos)
+# Uso: irm https://raw.githubusercontent.com/yokonad/kody/main/install.ps1 | iex
 
-$host.UI.RawUI.WindowTitle = "Kody - Instalacion"
+$ErrorActionPreference = "Stop"
 
+# ── Estetica GHOST ──────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "KODY - Scanner de Vulnerabilidades CLI" -ForegroundColor Cyan
+Write-Host "  _  __ ___  ____  _   _ " -ForegroundColor Red
+Write-Host " | |/ // _ \|  _ \| | | |" -ForegroundColor Red
+Write-Host " | ' /| | | | | | | | | |" -ForegroundColor Red
+Write-Host " | . \| |_| | |_| | |_| |" -ForegroundColor Red
+Write-Host " |_|\_\\___/|____/ \___/ " -ForegroundColor Red
+Write-Host "  private. dangerous. elite.   KODY installer" -ForegroundColor DarkGray
 Write-Host ""
 
-function Test-Command($cmd) {
-    try {
-        Get-Command $cmd -ErrorAction Stop | Out-Null
-        return $true
-    } catch {
-        return $false
-    }
+function Write-Step($label) {
+    Write-Host ("[ {0} ]" -f $label) -ForegroundColor DarkGray -NoNewline
+    Write-Host " ... [OK]" -ForegroundColor Green
 }
 
-function Pause-Script {
-    Write-Host ""
-    Write-Host "Presiona ENTER para salir..." -ForegroundColor Gray
-    $null = Read-Host
-}
+Write-Step "establishing secure channel"
+Write-Step "resolving latest release"
 
-# =============================================================================
-# PRE-INSTALACION
-# =============================================================================
-Write-Host "[PRE-INSTALACION] Preparando..." -ForegroundColor Magenta
+# ── Configuracion ───────────────────────────────────────────────────────────
+$Url        = "https://github.com/yokonad/kody/releases/latest/download/kody-x86_64-pc-windows-msvc.zip"
+$TmpDir     = "$env:TEMP\kody-install"
+$ZipPath    = "$TmpDir\kody.zip"
+$InstallDir = "$env:LOCALAPPDATA\bin\kody"
+$BinPath    = "$InstallDir\kody.exe"
 
-$BinDir = "$env:LOCALAPPDATA\bin\kody"
-$BinPath = "$BinDir\kody.exe"
+# Debug helper (DarkCyan, como en el script original)
+function Write-DebugLine($msg) { Write-Host "  [debug] $msg" -ForegroundColor DarkCyan }
 
-Write-Host "  [INFO] Directorio destino: $BinDir" -ForegroundColor Cyan
-
+# ── PASO 1: Descargando binario pre-compilado ───────────────────────────────
 Write-Host ""
+Write-Host "[PASO 1] Descargando Kody (binario pre-compilado)..." -ForegroundColor Magenta
+Write-DebugLine "origen: $Url"
 
-# =============================================================================
-# PASO 1: Descargar
-# =============================================================================
-Write-Host "[PASO 1] Descargando Kody..." -ForegroundColor Magenta
+if (Test-Path $TmpDir) { Remove-Item -Recurse -Force $TmpDir }
+New-Item -ItemType Directory -Force -Path $TmpDir | Out-Null
 
-$downloadUrl = "https://github.com/yokonad/kody/releases/latest/download/kody-x86_64-pc-windows-msvc.zip"
-$tempZip = "$env:TEMP\kody-install.zip"
-$tempExtract = "$env:TEMP\kody-install"
-
-Write-Host "  [INFO] URL: $downloadUrl" -ForegroundColor DarkCyan
-Write-Host "  [INFO] Descargando... (esto toma unos segundos)" -ForegroundColor Cyan
-
-$ProgressPreference = 'Continue'
+# Barra de progreso de descarga
+$ProgressPreference = "Continue"
 
 try {
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    Invoke-WebRequest -Uri $downloadUrl -OutFile $tempZip -UseBasicParsing -TimeoutSec 120
-    Write-Host "  [OK] Descarga completada!" -ForegroundColor Green
-} catch {
-    $statusCode = $_.Exception.Response.StatusCode.value__
-    if ($statusCode -eq 404) {
-        Write-Host "  [ERROR] No se encontro una version pre-compilada de Kody (HTTP 404)." -ForegroundColor Red
-        Write-Host "  [INFO] Asegurate de que exista al menos un release en GitHub." -ForegroundColor Cyan
-        Write-Host "  [INFO] Releases: https://github.com/yokonad/kody/releases" -ForegroundColor Cyan
-        Write-Host ""
-        Write-Host "  [INFO] Como alternativa, compila desde codigo fuente:" -ForegroundColor Yellow
+    Invoke-WebRequest -Uri $Url -OutFile $ZipPath -UseBasicParsing
+}
+catch {
+    $status = $null
+    try { $status = $_.Exception.Response.StatusCode.value__ } catch { }
+    if ($status -eq 404) {
+        Write-Host "  [ERROR] No se encontro una version pre-compilada (HTTP 404)." -ForegroundColor Red
+        Write-Host "  Aun no hay un release publicado para tu plataforma." -ForegroundColor Yellow
+        Write-Host "  Como alternativa, compila desde codigo fuente:" -ForegroundColor Cyan
         Write-Host "    git clone https://github.com/yokonad/kody.git" -ForegroundColor White
-        Write-Host "    cd kody/kody" -ForegroundColor White
-        Write-Host "    cargo build --release" -ForegroundColor White
-    } else {
-        Write-Host "  [ERROR] Error al descargar Kody." -ForegroundColor Red
-        Write-Host "  [INFO] Motivo: $_" -ForegroundColor DarkCyan
-        Write-Host "  [INFO] Verifica tu conexion a internet y que GitHub este accesible." -ForegroundColor Cyan
-        Write-Host ""
-        Write-Host "  [INFO] Como alternativa, compila desde codigo fuente:" -ForegroundColor Yellow
-        Write-Host "    git clone https://github.com/yokonad/kody.git" -ForegroundColor White
-        Write-Host "    cd kody/kody" -ForegroundColor White
-        Write-Host "    cargo build --release" -ForegroundColor White
+        Write-Host "    cd kody/kody; cargo build --release" -ForegroundColor White
     }
-    Pause-Script
-    return
+    else {
+        Write-Host "  [ERROR] Fallo de red al descargar: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "  Revisa tu conexion e intenta de nuevo." -ForegroundColor Yellow
+    }
+    Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
+    exit 1
 }
 
+Write-Host "  [OK] Descarga completada" -ForegroundColor Green
+
+# ── PASO 2: Extraer e instalar ──────────────────────────────────────────────
 Write-Host ""
+Write-Host "[PASO 2] Instalando..." -ForegroundColor Magenta
 
-# =============================================================================
-# PASO 2: Instalar
-# =============================================================================
-Write-Host "[PASO 2] Instalando Kody..." -ForegroundColor Magenta
+Expand-Archive -Path $ZipPath -DestinationPath $TmpDir -Force
 
-# Limpiar instalacion anterior
-if (Test-Path $BinDir) {
-    Write-Host "  [INFO] Limpiando instalacion anterior..." -ForegroundColor Cyan
-    try {
-        Remove-Item -Recurse -Force $BinDir -ErrorAction Stop
-        Write-Host "  [OK] Limpiado correctamente" -ForegroundColor Green
-    } catch {
-        Write-Host "  [WARN] No se pudo limpiar $BinDir : $_" -ForegroundColor Yellow
-        Write-Host "  [INFO] Continuando... (puede que necesites cerrar kody.exe si esta abierto)" -ForegroundColor Cyan
-    }
+if (-not (Test-Path $InstallDir)) {
+    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 }
 
-# Extraer archivo zip
-Write-Host "  [INFO] Extrayendo..." -ForegroundColor Cyan
-
-try {
-    if (Test-Path $tempExtract) {
-        Remove-Item -Recurse -Force $tempExtract -ErrorAction SilentlyContinue
-    }
-
-    Expand-Archive -Path $tempZip -DestinationPath $tempExtract -Force
-
-    # Create install directory
-    if (-not (Test-Path $BinDir)) {
-        New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
-    }
-
-    # Copy binary — search for kody.exe in extraction dir (handle nested folders)
-    $exe = Get-ChildItem -Path $tempExtract -Filter "kody.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-
-    if ($exe) {
-        Copy-Item $exe.FullName $BinPath -Force
-        Write-Host "  [OK] Binario instalado en: $BinPath" -ForegroundColor Green
-        $exeSize = (Get-Item $BinPath).Length / 1MB
-        Write-Host "  [INFO] Tamano: $([math]::Round($exeSize, 2)) MB" -ForegroundColor Cyan
-    } else {
-        Write-Host "  [ERROR] No se encontro kody.exe en el archivo descargado." -ForegroundColor Red
-        Write-Host "  [INFO] El archivo puede estar corrupto. Intenta de nuevo." -ForegroundColor Cyan
-        Pause-Script
-        return
-    }
-} catch {
-    Write-Host "  [ERROR] Error al extraer: $_" -ForegroundColor Red
-    Write-Host "  [INFO] El archivo descargado puede estar corrupto. Intenta de nuevo." -ForegroundColor Cyan
-    Pause-Script
-    return
-} finally {
-    # Cleanup temp files
-    Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
-    Remove-Item $tempExtract -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Host "  [INFO] Archivos temporales eliminados" -ForegroundColor DarkCyan
+$ExtractedExe = Get-ChildItem -Path $TmpDir -Filter "kody.exe" -Recurse | Select-Object -First 1
+if (-not $ExtractedExe) {
+    Write-Host "  [ERROR] No se encontro kody.exe dentro del archivo descargado." -ForegroundColor Red
+    Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
+    exit 1
 }
 
+Copy-Item -Path $ExtractedExe.FullName -Destination $BinPath -Force
+Write-Host "  [OK] Kody instalado en: $BinPath" -ForegroundColor Green
+
+# Limpieza de temporales
+Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
+
+# ── PASO 3: Configurar PATH ─────────────────────────────────────────────────
 Write-Host ""
-
-# =============================================================================
-# PASO 3: PATH
-# =============================================================================
 Write-Host "[PASO 3] Configurando PATH..." -ForegroundColor Magenta
 
-$UserPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
-if ($UserPath -notlike "*$BinDir*") {
-    [System.Environment]::SetEnvironmentVariable("Path", "$UserPath;$BinDir", "User")
-    $env:Path = "$BinDir;$env:Path"
-    Write-Host "  [OK] PATH actualizado (agregado: $BinDir)" -ForegroundColor Green
-    Write-Host "  [INFO] Abre una NUEVA terminal PowerShell (cierra y abre de nuevo)" -ForegroundColor Cyan
-} else {
-    $env:Path = "$BinDir;$env:Path"
-    Write-Host "  [OK] PATH ya configurado" -ForegroundColor Green
+$UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+if ($UserPath -notlike "*$InstallDir*") {
+    [Environment]::SetEnvironmentVariable("Path", "$UserPath;$InstallDir", "User")
+    $env:Path = "$env:Path;$InstallDir"
+    Write-Host "  [OK] PATH actualizado" -ForegroundColor Green
+}
+else {
+    Write-Host "  [OK] El PATH ya contenia la ruta" -ForegroundColor Green
 }
 
-# Verify installation
-Write-Host ""
-Write-Host "[VERIFICACION]" -ForegroundColor Magenta
-if (Test-Path $BinPath) {
-    Write-Host "  [OK] kody.exe encontrado en: $BinPath" -ForegroundColor Green
-    Write-Host "  [OK] Para usar AHORA en esta terminal: refreshenv" -ForegroundColor Cyan
-    Write-Host "  [OK] O ejecuta en una NUEVA terminal: kody --help" -ForegroundColor Cyan
-} else {
-    Write-Host "  [ERROR] kody.exe no encontrado!" -ForegroundColor Red
-}
-
+# ── Listo ───────────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "INSTALACION COMPLETADA!" -ForegroundColor Green
 Write-Host ""
-Write-Host "Abre una NUEVA terminal PowerShell y ejecuta:" -ForegroundColor Cyan
+Write-Host "Abre una NUEVA terminal y ejecuta:" -ForegroundColor Cyan
 Write-Host "  kody --help" -ForegroundColor White
+Write-Host "  kody buscar ejemplo.com" -ForegroundColor White
 Write-Host ""
-
-Pause-Script

@@ -1,15 +1,26 @@
-# Kody - Scanner de Vulnerabilidades CLI
+# Kody — Scanner de Vulnerabilidades CLI
 
-Herramienta CLI desarrollada en Rust para escaneo de vulnerabilidades con integración de IA.
+```
+  _  __ ___  ____  _   _
+ | |/ // _ \|  _ \| | | |
+ | ' /| | | | | | | | | |
+ | . \| |_| | |_| | |_| |
+ |_|\_\\___/|____/ \___/
+  private. dangerous. elite.
+```
 
-## Características
+Herramienta CLI en Rust para reconocimiento y escaneo de vulnerabilidades, con
+detección **real** de servicios (banner grabbing), una base de **CVEs curada y
+verificada**, e integración de IA que **autodetecta el proveedor** por la clave.
 
-- **Escaneo de IP/Dominio** - Escanea objetivos específicos en busca de vulnerabilidades
-- **Auto-Escaneo** - Descubre y escanea automáticamente todos los dispositivos en tu red
-- **Mapeo de IPs Ocultas** - Descubre IPs con configuraciones de puertos no estándar
-- **Integración con IA** - Análisis opcional mediante IA usando OpenAI o Anthropic
-- **Modo Sin Conexión** - Funciona sin internet usando patrones de vulnerabilidades cacheados
-- **Multiplataforma** - Funciona en Linux, macOS y Windows
+## Filosofía
+
+- **Simple**: nada de la complejidad de nmap. `kody buscar <objetivo>` y listo.
+- **Real**: detecta el producto y versión que de verdad corre en cada puerto y
+  solo reporta una CVE cuando esa versión está realmente en el rango vulnerable.
+  Sin versión → "exposiciones" honestas, **nunca CVEs inventadas**.
+- **Rápido**: por defecto escanea los ~120 puertos más comunes con alta
+  concurrencia. `--ports full` para los 65535 cuando lo necesites.
 
 ## Instalación con Un Solo Comando
 
@@ -25,156 +36,152 @@ curl -fsSL https://raw.githubusercontent.com/yokonad/kody/main/install.sh | bash
 irm https://raw.githubusercontent.com/yokonad/kody/main/install.ps1 | iex
 ```
 
----
+El instalador:
 
-El script de instalación:
-1. Descarga el binario pre-compilado desde GitHub Releases (~10 segundos)
-2. Extrae el binario y lo instala en tu `PATH`
-3. **No requiere Rust, Git, ni compilación**
+1. Descarga el binario **pre-compilado** desde GitHub Releases (**~10 segundos**)
+2. Lo extrae y lo instala en tu `PATH`
+3. **No requiere Rust, ni Git, ni compilación**
 
 ---
 
 ## Instalación Manual (desde código fuente)
 
-### Linux / macOS
+Solo si tu plataforma no tiene binario pre-compilado. Aquí sí necesitas el
+toolchain de Rust (desde <https://rustup.rs>):
 
 ```bash
-# Clonar el repositorio
 git clone https://github.com/yokonad/kody.git
 cd kody/kody
-
-# Instalar Rust si no lo tienes
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
-
-# Compilar
 cargo build --release
-
-# Ejecutar
 ./target/release/kody --help
-```
-
-### Windows
-
-```powershell
-# En PowerShell (como administrador)
-
-# Instalar Rust si no lo tienes
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-
-# Clonar el repositorio
-git clone https://github.com/yokonad/kody.git
-cd kody/kody
-
-# Compilar
-cargo build --release
-
-# Ejecutar
-.\target\release\kody.exe --help
 ```
 
 ## Uso Rápido
 
 ```bash
-# Ver todos los comandos disponibles
-kody --help
+# Buscar todo sobre un dominio (resuelve TODAS sus IPs + servicios + CVEs)
+kody buscar ejemplo.com
 
-# Escanear un objetivo específico
-kody scan 192.168.1.1 --ports 1-1024
+# Buscar sobre una IP concreta
+kody buscar 192.168.1.1
 
-# Auto-descubrir y escanear tu red
-kody auto-scan
+# Escaneo completo de puertos (1-65535)
+kody buscar ejemplo.com --ports full
 
-# Mapear IPs ocultas en tu red
-kody map-hidden --range 192.168.1.0/24
+# Con análisis de IA (te pedirá la API key si no hay una configurada)
+kody buscar 192.168.1.1 --ai
+
+# Descubrir y listar TODAS las IPs de tu red local
+kody red
+
+# Mapear IPs ocultas / puertos no estándar
+kody ocultas --range 192.168.1.0/24
 ```
 
 ## Comandos
 
-### `kody scan <objetivo>`
+### `kody buscar <objetivo>`  *(alias: `scan`)*
 
-Escanea una IP o dominio específico en busca de vulnerabilidades.
+Reconocimiento de una IP o un dominio.
+
+- **Dominio**: resuelve y muestra **todas** las IPs a las que apunta, luego
+  escanea puertos, detecta servicios+versiones reales y cruza con la base de
+  CVEs. "Todo sobre él".
+- **IP**: escanea directamente.
 
 ```bash
-# Escanear puertos comunes
-kody scan 192.168.1.1 --ports 1-1024
-
-# Escanear puertos específicos
-kody scan example.com --ports 80,443,8080
-
-# Escanear con análisis de IA
-kody scan 192.168.1.1 --ports 1-1024 --ai
+kody buscar ejemplo.com
+kody buscar 10.0.0.5 --ports 1-1024
+kody buscar api.ejemplo.com --ai
 ```
 
-### `kody auto-scan`
+| Opción | Descripción |
+|--------|-------------|
+| `--ports <spec>` | `top` (por defecto), `full` (1-65535), o `80,443,8000-8010` |
+| `--ai` | Análisis con IA de los resultados |
 
-Descubre automáticamente todos los dispositivos en tu red local y los escanea.
+### `kody red`  *(alias: `auto-scan`)*
+
+Descubre los dispositivos de tu red local y al final te entrega un inventario
+claro de **"las IPs que tengo"**, con puertos y hallazgos por host.
 
 ```bash
-# Escanear red automáticamente
-kody auto-scan
-
-# Escanear usando una interfaz específica
-kody auto-scan --interface eth0
+kody red
+kody red --interface eth0
 ```
 
-### `kody map-hidden <rango>`
+### `kody ocultas <rango>`  *(alias: `map-hidden`)*
 
-Mapea IPs "ocultas" o con puertos no estándar (común en sistemas de vigilancia, cámaras, etc.).
+Mapea IPs "ocultas" o con puertos no estándar (cámaras, routers, backdoors).
 
 ```bash
-# Mapeo básico
-kody map-hidden --range 192.168.1.0/24
-
-# Mapeo profundo (más lento pero más exhaustivo)
-kody map-hidden --range 192.168.1.0/24 --deep
+kody ocultas --range 192.168.1.0/24
+kody ocultas --range 192.168.1.0/24 --deep
 ```
 
 ### `kody config`
 
-Configura el proveedor de IA y la clave API.
+Configura la IA y el formato de salida.
 
 ```bash
-# Configurar OpenAI
-kody config --ai-provider openai --ai-key sk-tu-clave
+# Pega tu clave: el proveedor se DETECTA solo (OpenAI / Anthropic / Google)
+kody config --ai-key TU_CLAVE
 
 # Ver configuración actual
 kody config --show
 ```
 
-## Opciones
+## Integración de IA (sin proveedor fijo)
 
-| Opción | Descripción |
-|--------|-------------|
-| `--ports <rango>` | Rango de puertos a escanear (por defecto: 1-1024) |
-| `--ai` | Habilitar análisis con IA para los resultados |
-| `--deep` | Modo de escaneo profundo para map-hidden |
-| `--json` | Salida de resultados en formato JSON |
-| `--interface <nombre>` | Interfaz de red a usar para auto-scan |
+Kody no está atado a una IA concreta. Cuando usas `--ai`:
+
+1. Si ya tienes una clave configurada, se usa.
+2. Si no, te **pide pegar una API key** (o Enter para modo offline).
+3. El sistema **identifica automáticamente** el proveedor por el formato:
+   - `sk-ant-...` → **Anthropic** (Claude)
+   - `AIza...` → **Google** (Gemini)
+   - `sk-...` → **OpenAI** (GPT)
+4. La clave se guarda para la próxima vez.
+
+Sin clave, el **modo offline** genera el informe con la base de CVEs local.
+
+## Detección real de vulnerabilidades
+
+- **Banner grabbing**: lee el banner de cada puerto abierto (SSH/FTP/SMTP por el
+  saludo de conexión; HTTP/HTTPS por la cabecera `Server`) para obtener el
+  **producto y versión reales**.
+- **CVEs curadas por versión**: cada CVE de la base está verificada y solo se
+  reporta si la versión detectada cae en su rango vulnerable
+  (p. ej. regreSSHion en OpenSSH 8.5p1–9.7p1, Apache 2.4.49 path traversal,
+  vsftpd 2.3.4 backdoor, SambaCry, Exim, nginx CVE-2021-23017).
+- **Exposiciones**: servicios sensibles (Telnet en claro, Redis/Mongo/MySQL
+  expuestos, RDP/VNC, SMB…) se reportan como riesgo honesto, **sin CVE inventada**.
 
 ## Arquitectura
 
 ```
 kody/
 ├── src/
-│   ├── main.rs         # Punto de entrada CLI
-│   ├── ascii/          # Arte ASCII para banners
-│   ├── ai/             # Proveedores de IA (OpenAI, Anthropic, offline)
-│   ├── scanner/        # Escaneo de puertos y detección de vulnerabilidades
-│   ├── network/        # Descubrimiento de red
-│   ├── db/             # Cache offline con SQLite
-│   └── config/         # Gestión de configuración
-├── install.sh          # Script de instalación para Linux/macOS
-└── install.ps1         # Script de instalación para Windows
+│   ├── main.rs          # CLI + estética GHOST (banner, boot, tabla de sesión)
+│   ├── ascii/           # Banner, secuencia de arranque, tabla de sesión
+│   ├── ai/              # Proveedores de IA (autodetección) + modo offline
+│   ├── scanner/         # Escaneo de puertos, banner grabbing, base de CVEs
+│   ├── network/         # Descubrimiento de red (detección de IP local real)
+│   ├── db/              # Cache offline con SQLite
+│   └── config/          # Configuración + autodetección de proveedor
+├── install.sh           # Instalador Linux/macOS (descarga binario)
+└── install.ps1          # Instalador Windows (descarga binario)
 ```
 
 ## Nota de Seguridad
 
-Los tokens se almacenan en texto plano en `~/.kody/methods.db`. Las versiones futuras incluirán cifrado en reposo.
+La clave de API se guarda en texto plano en `~/.kody/config.toml`. En la base de
+datos (`~/.kody/methods.db`) solo se guardan **hashes** de las claves, nunca la
+clave en claro. Usa Kody solo contra objetivos para los que tengas autorización.
 
 ## Licencia
 
-MIT License - ver archivo LICENSE
+MIT License — ver archivo LICENSE.
 
 ## Autores
 

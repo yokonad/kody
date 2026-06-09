@@ -1,5 +1,5 @@
 use crate::ai::ScanResult;
-use crate::scanner::{ScanConfig, parse_port_range};
+use crate::scanner::{ScanConfig, parse_port_spec};
 use crate::network::{self, ScanOptions};
 use std::time::Instant;
 
@@ -83,7 +83,7 @@ impl AutoScanner {
 
 /// Scan a single host for open ports and vulnerabilities
 async fn scan_host(target: &str, config: &ScanConfig) -> ScanResult {
-    let ports = parse_port_range(&config.ports);
+    let ports = parse_port_spec(&config.ports);
 
     // Use Scanner::run for actual scanning
     let result = crate::scanner::Scanner::run(target, ports, config).await;

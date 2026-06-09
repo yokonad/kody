@@ -1,7 +1,6 @@
 use crate::ai::{ScanResult, ServiceInfo, Vulnerability, Severity};
-use crate::scanner::{ScanConfig, get_service_name};
+use crate::scanner::{ScanConfig, get_service_name, exposure_findings, tcp_scan};
 use crate::network::{self, Subnet};
-use std::net::Ipv4Addr;
 
 pub struct HiddenMapper;
 
@@ -127,10 +126,12 @@ fn parse_cidr(cidr: &str) -> Option<network::Subnet> {
 
     let ip: std::net::Ipv4Addr = parts[0].parse().ok()?;
     let mask: u8 = parts[1].parse().ok()?;
+    if mask > 32 {
+        return None;
+    }
 
-    let network = Ipv4Addr::new(ip.octets()[0], ip.octets()[1], ip.octets()[2], 0);
-
-    Some(network::Subnet { network, mask })
+    // Subnet::network_address() applies the mask correctly; no manual zeroing.
+    Some(network::Subnet { network: ip, mask })
 }
 
 /// Discover hosts with non-standard ports open
@@ -174,24 +175,10 @@ async fn discover_hidden_hosts(subnet: &Subnet, ports: &[u16], config: &ScanConf
     hosts
 }
 
-/// Scan a list of stealth ports on a target
+/// Scan a list of stealth ports on a target (concurrently).
 async fn scan_stealth_ports(target: &str, ports: &[u16], timeout_ms: u64) -> Vec<u16> {
-    use std::time::Duration;
-    use tokio::net::TcpStream;
-    use tokio::time::timeout;
-
-    let mut open = Vec::new();
-
-    for port in ports {
-        let addr = format!("{}:{}", target, port);
-        let timeout_duration = Duration::from_millis(timeout_ms);
-
-        if let Ok(Ok(_)) = timeout(timeout_duration, TcpStream::connect(&addr)).await {
-            open.push(*port);
-        }
-    }
-
-    open
+    // Reuse the shared concurrent scanner; ports are few, so scan them at once.
+    tcp_scan(target, ports.to_vec(), ports.len().max(1), timeout_ms).await
 }
 
 /// Simple hidden host info
@@ -222,53 +209,35 @@ fn classify_hidden_host(ports: &[u16]) -> String {
     }
 }
 
-/// Analyze vulnerabilities for hidden services
+/// Analyze risks for hidden services. These are exposure/heuristic findings,
+/// never fabricated CVEs.
 fn analyze_hidden_vulnerabilities(ports: &[u16]) -> Vec<Vulnerability> {
     let mut vulns = Vec::new();
 
-    for port in ports {
-        // Check for SSH on non-standard ports
-        if *port == 8022 || *port == 9022 || *port == 2222 || *port == 6022 {
-            vulns.push(Vulnerability {
-                cve_id: Some("CVE-2023-38408".to_string()),
-                description: format!("SSH on non-standard port {} - possible stealth host", port),
-                severity: Severity::Info,
-                affected_port: *port,
-                service: Some("ssh".to_string()),
-            });
+    for &port in ports {
+        // SSH on a non-standard port: not a vuln by itself, just notable.
+        if matches!(port, 1022 | 2222 | 3022 | 6022 | 8022 | 9022 | 22222) {
+            vulns.push(Vulnerability::new(
+                None,
+                &format!("SSH on non-standard port {} - possible stealth host", port),
+                Severity::Info,
+                port,
+            ).with_service("ssh"));
         }
 
-        // Check for Telnet (high risk)
-        if *port == 23 || *port == 2323 || *port == 1023 {
-            vulns.push(Vulnerability {
-                cve_id: None,
-                description: format!("Telnet detected on port {} - credentials transmitted in cleartext", port),
-                severity: Severity::High,
-                affected_port: *port,
-                service: Some("telnet".to_string()),
-            });
+        // Ports historically used by backdoors/trojans.
+        if SUSPICIOUS_PORTS.contains(&port) {
+            vulns.push(Vulnerability::new(
+                None,
+                &format!("Port {} matches a known backdoor/trojan default - investigate", port),
+                Severity::Critical,
+                port,
+            ));
         }
 
-        // Check for suspicious ports
-        if SUSPICIOUS_PORTS.contains(port) {
-            vulns.push(Vulnerability {
-                cve_id: None,
-                description: format!("Suspicious port {} detected - possible backdoor", port),
-                severity: Severity::Critical,
-                affected_port: *port,
-                service: None,
-            });
-        }
-
-        // Check for database ports
-        if *port == 3306 || *port == 5432 || *port == 27017 || *port == 6379 {
-            vulns.push(Vulnerability {
-                cve_id: Some("CVE-OPEN".to_string()),
-                description: format!("Database port {} exposed on non-standard configuration", port),
-                severity: Severity::High,
-                affected_port: *port,
-                service: Some("database".to_string()),
-            });
+        // Reuse the curated exposure findings for sensitive services.
+        for v in exposure_findings(port) {
+            vulns.push(v.with_service(get_service_name(port)));
         }
     }
 

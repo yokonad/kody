@@ -60,6 +60,7 @@ impl Database {
 }
 
 // Re-export submodules
+#[allow(unused_imports)]
 pub use tokens::TokenManager;
 pub use vulns::VulnCache;
 pub use history::ScanHistory;

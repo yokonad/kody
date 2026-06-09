@@ -1,5 +1,7 @@
-name: Release
+name: release
 
+# Build pre-compiled binaries for every tagged release (v*) and attach them
+# to the GitHub Release so the install scripts can download them in ~10s.
 on:
   push:
     tags:
@@ -8,28 +10,55 @@ on:
 permissions:
   contents: write
 
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+
 jobs:
-  build-windows:
-    runs-on: windows-latest
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            asset: kody-x86_64-unknown-linux-musl.tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            asset: kody-aarch64-apple-darwin.tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset: kody-x86_64-pc-windows-msvc.zip
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@v1
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
+          targets: ${{ matrix.target }}
 
-      - name: Build
-        env:
-          CARGO_INCREMENTAL: 0
-          RUSTFLAGS: '-C codegen-units=1'
+      - name: Install musl tools (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package (Linux / macOS)
+        if: matrix.os != 'windows-latest'
         run: |
-          cargo build --release
-          powershell -Command "Compress-Archive -Path target/release/kody.exe -DestinationPath kody-x86_64-pc-windows-msvc.zip -Force"
+          tar -czf "${{ matrix.asset }}" -C "target/${{ matrix.target }}/release" kody
 
-      - name: Upload Release Asset
+      - name: Package (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "target/${{ matrix.target }}/release/kody.exe" -DestinationPath "${{ matrix.asset }}"
+
+      - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: kody-x86_64-pc-windows-msvc.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          files: ${{ matrix.asset }}

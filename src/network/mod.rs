@@ -3,7 +3,7 @@
 
 pub mod discovery;
 
-pub use discovery::{Subnet, discover_hosts, get_local_subnet};
+pub use discovery::{Subnet, discover_hosts, get_local_subnet, detect_local_ipv4};
 
 /// Result of scanning a single host
 #[derive(Debug, Clone)]

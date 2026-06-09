@@ -1,6 +1,6 @@
 [package]
 name = "kody"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 description = "CLI vulnerability scanner with AI integration"
 authors = ["kody team"]
@@ -25,6 +25,15 @@ toml = "0.8"
 
 # Network
 reqwest = { version = "0.11", features = ["json"] }
+
+# Async stream combinators (concurrent scanning)
+futures = "0.3"
+
+# Banner / version parsing
+regex = "1"
+
+# UTC timestamps for the session banner
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 # Database
 rusqlite = { version = "0.31", features = ["bundled"] }

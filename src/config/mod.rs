@@ -22,6 +22,23 @@ impl Default for Settings {
     }
 }
 
+/// Auto-detect the AI provider from the shape of an API key.
+///
+/// Kody is not tied to one vendor: you paste a key and the system figures out
+/// who it belongs to. Returns `None` for unrecognized formats.
+pub fn detect_provider(key: &str) -> Option<&'static str> {
+    let k = key.trim();
+    if k.starts_with("sk-ant-") {
+        Some("anthropic")
+    } else if k.starts_with("AIza") {
+        Some("google")
+    } else if k.starts_with("sk-") || k.starts_with("sess-") {
+        Some("openai")
+    } else {
+        None
+    }
+}
+
 impl Settings {
     fn config_path() -> Result<PathBuf> {
         let home = dirs::home_dir().context("Cannot find home directory")?;
@@ -95,5 +112,13 @@ mod tests {
         let settings = Settings::default();
         assert_eq!(settings.output_format, Some("text".to_string()));
         assert!(settings.ai_key.is_none());
+    }
+
+    #[test]
+    fn test_detect_provider() {
+        assert_eq!(detect_provider("sk-ant-api03-abc"), Some("anthropic"));
+        assert_eq!(detect_provider("AIzaSyabc123"), Some("google"));
+        assert_eq!(detect_provider("sk-proj-abc"), Some("openai"));
+        assert_eq!(detect_provider("garbage"), None);
     }
 }
