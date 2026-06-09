@@ -52,15 +52,16 @@ pub fn banner_ascii() -> String {
     let c = colors::BRIGHT_RED;
     let r = colors::RESET;
     let g = colors::GREY;
+    // Raw string keeps the backslashes literal — the final letter is a real "Y".
+    let art = r#"  _  __  ___   ____  __   __
+ | |/ / / _ \ |  _ \ \ \ / /
+ | ' / | | | || | | | \ V /
+ | . \ | |_| || |_| |  | |
+ |_|\_\ \___/ |____/   |_|"#;
     format!(
-        "\n\
-{c}  _  __ ___  ____  _   _ {r}\n\
-{c} | |/ // _ \\|  _ \\| | | |{r}\n\
-{c} | ' /| | | | | | | | | |{r}\n\
-{c} | . \\| |_| | |_| | |_| |{r}\n\
-{c} |_|\\_\\\\___/|____/ \\___/ {r}\n\
-{g}  private. dangerous. elite.   KODY v{ver}{r}\n",
+        "\n{c}{art}{r}\n{g}  private. dangerous. elite.   KODY v{ver}{r}\n",
         c = c,
+        art = art,
         r = r,
         g = g,
         ver = VERSION,

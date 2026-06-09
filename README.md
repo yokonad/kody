@@ -1,11 +1,11 @@
 # Kody — Scanner de Vulnerabilidades CLI
 
 ```
-  _  __ ___  ____  _   _
- | |/ // _ \|  _ \| | | |
- | ' /| | | | | | | | | |
- | . \| |_| | |_| | |_| |
- |_|\_\\___/|____/ \___/
+  _  __  ___   ____  __   __
+ | |/ / / _ \ |  _ \ \ \ / /
+ | ' / | | | || | | | \ V /
+ | . \ | |_| || |_| |  | |
+ |_|\_\ \___/ |____/   |_|
   private. dangerous. elite.
 ```
 
@@ -75,7 +75,7 @@ kody buscar 192.168.1.1 --ai
 kody red
 
 # Mapear IPs ocultas / puertos no estándar
-kody ocultas --range 192.168.1.0/24
+kody buscar ocultas --range 192.168.1.0/24
 ```
 
 ## Comandos
@@ -110,13 +110,13 @@ kody red
 kody red --interface eth0
 ```
 
-### `kody ocultas <rango>`  *(alias: `map-hidden`)*
+### `kody buscar ocultas`
 
 Mapea IPs "ocultas" o con puertos no estándar (cámaras, routers, backdoors).
 
 ```bash
-kody ocultas --range 192.168.1.0/24
-kody ocultas --range 192.168.1.0/24 --deep
+kody buscar ocultas --range 192.168.1.0/24
+kody buscar ocultas --range 192.168.1.0/24 --deep
 ```
 
 ### `kody config`

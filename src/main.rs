@@ -39,17 +39,27 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Buscar y analizar un objetivo: IP o dominio (recon completo)
+    /// Buscar: recon de un objetivo (IP/dominio), o un sub-modo:
+    /// `kody buscar ocultas` / `kody buscar red`
     #[command(visible_alias = "scan")]
     Buscar {
-        /// IP o dominio a investigar
+        /// IP, dominio, o un sub-modo: "ocultas" (IPs ocultas) o "red" (tu red)
         target: String,
-        /// Puertos: "top" (comunes, por defecto), "full" (1-65535), o "80,443"
+        /// [objetivo] Puertos: "top" (por defecto), "full" (1-65535), o "80,443"
         #[arg(short, long, default_value = "top")]
         ports: String,
         /// Habilitar análisis con IA
         #[arg(short, long)]
         ai: bool,
+        /// [ocultas] Rango de red en notación CIDR
+        #[arg(long, default_value = "192.168.0.0/24")]
+        range: String,
+        /// [ocultas] Escaneo profundo (puertos subterráneos)
+        #[arg(short, long)]
+        deep: bool,
+        /// [red] Interfaz de red a usar (auto-detecta si se omite)
+        #[arg(short, long)]
+        interface: Option<String>,
     },
     /// Descubrir y escanear todos los dispositivos de tu red local
     #[command(visible_alias = "auto-scan")]
@@ -60,16 +70,6 @@ pub enum Commands {
         /// Habilitar análisis con IA
         #[arg(short, long)]
         ai: bool,
-    },
-    /// Mapear IPs ocultas / puertos no estándar en un rango
-    #[command(visible_alias = "map-hidden")]
-    Ocultas {
-        /// Rango de red en notación CIDR
-        #[arg(short, long, default_value = "192.168.0.0/24")]
-        range: String,
-        /// Escaneo profundo (puertos subterráneos)
-        #[arg(short, long)]
-        deep: bool,
     },
     /// Configurar IA (la clave se autodetecta) y formato de salida
     Config {
@@ -150,9 +150,16 @@ fn main() -> ExitCode {
     let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
 
     let result = match cli.command {
-        Commands::Buscar { target, ports, ai } => rt.block_on(async_scan(&target, &ports, ai, db.as_ref())),
+        Commands::Buscar { target, ports, ai, range, deep, interface } => {
+            // `buscar` is the umbrella verb: a bare target does recon, while the
+            // keywords "ocultas" and "red" switch to those modes.
+            match target.as_str() {
+                "ocultas" => rt.block_on(async_map_hidden(&range, deep)),
+                "red" => rt.block_on(async_auto_scan(interface.as_deref(), ai)),
+                _ => rt.block_on(async_scan(&target, &ports, ai, db.as_ref())),
+            }
+        }
         Commands::Red { interface, ai } => rt.block_on(async_auto_scan(interface.as_deref(), ai)),
-        Commands::Ocultas { range, deep } => rt.block_on(async_map_hidden(&range, deep)),
         Commands::Config { ai_provider, ai_key, output, show } => handle_config(ai_provider, ai_key, output, show, db.as_ref()),
     };
 
