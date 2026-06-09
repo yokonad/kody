@@ -5,11 +5,11 @@ $ErrorActionPreference = "Stop"
 
 # ── Estetica GHOST ──────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "  _  __ ___  ____  _   _ " -ForegroundColor Red
-Write-Host " | |/ // _ \|  _ \| | | |" -ForegroundColor Red
-Write-Host " | ' /| | | | | | | | | |" -ForegroundColor Red
-Write-Host " | . \| |_| | |_| | |_| |" -ForegroundColor Red
-Write-Host " |_|\_\\___/|____/ \___/ " -ForegroundColor Red
+Write-Host "  _  __  ___   ____  __   __" -ForegroundColor Red
+Write-Host " | |/ / / _ \ |  _ \ \ \ / /" -ForegroundColor Red
+Write-Host " | ' / | | | || | | | \ V /" -ForegroundColor Red
+Write-Host " | . \ | |_| || |_| |  | |" -ForegroundColor Red
+Write-Host " |_|\_\ \___/ |____/   |_|" -ForegroundColor Red
 Write-Host "  private. dangerous. elite.   KODY installer" -ForegroundColor DarkGray
 Write-Host ""
 

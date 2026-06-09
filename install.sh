@@ -17,11 +17,15 @@ REPO="yokonad/kody"
 
 # ── Estetica GHOST ──────────────────────────────────────────────────────────
 echo ""
-echo -e "${RED}  _  __ ___  ____  _   _ ${RESET}"
-echo -e "${RED} | |/ // _ \\|  _ \\| | | |${RESET}"
-echo -e "${RED} | ' /| | | | | | | | | |${RESET}"
-echo -e "${RED} | . \\| |_| | |_| | |_| |${RESET}"
-echo -e "${RED} |_|\\_\\\\___/|____/ \\___/ ${RESET}"
+printf '%b' "${RED}"
+cat <<'GHOST'
+  _  __  ___   ____  __   __
+ | |/ / / _ \ |  _ \ \ \ / /
+ | ' / | | | || | | | \ V /
+ | . \ | |_| || |_| |  | |
+ |_|\_\ \___/ |____/   |_|
+GHOST
+printf '%b\n' "${RESET}"
 echo -e "${GREY}  private. dangerous. elite.   KODY installer${RESET}"
 echo ""
 
