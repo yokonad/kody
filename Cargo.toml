@@ -23,8 +23,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.8"
 
-# Network
-reqwest = { version = "0.11", features = ["json"] }
+# Network — rustls (no OpenSSL) so the musl static build links cleanly
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 
 # Async stream combinators (concurrent scanning)
 futures = "0.3"
